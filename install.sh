@@ -2,42 +2,155 @@
 # ---------------------------------------------------------------------------
 # Aurum — self-hosted personal finance
 #
-# One-line install (Debian/Ubuntu, ideal for a Proxmox LXC container):
+# One-line install (Debian/Ubuntu, or directly on a Proxmox host):
 #   bash -c "$(curl -fsSL https://raw.githubusercontent.com/ssan9876/aurum-finance/main/install.sh)"
 #
 # What it does:
+#   * on a Proxmox host: offers to create a dedicated LXC container and
+#     installs Aurum inside it (re-running updates that container)
 #   * installs Node.js 22 (NodeSource) + git if missing
 #   * clones/updates the app into /opt/aurum
 #   * builds the web app + server, creates the SQLite DB in /var/lib/aurum
 #   * optionally sets an access password (stored in /etc/aurum/aurum.env)
 #   * installs and starts a systemd service (aurum.service)
 #
-# Re-running the script updates an existing install in place.
+# Re-running the script updates an existing install in place. Noisy tool
+# output goes to /tmp/aurum-install.log. To uninstall:
+#   bash -c "$(curl -fsSL https://raw.githubusercontent.com/ssan9876/aurum-finance/main/uninstall.sh)"
+#
+# Container-creation knobs (all optional):
+#   AURUM_CT_ID, AURUM_CT_HOSTNAME (aurum), AURUM_CT_STORAGE (local-lvm),
+#   AURUM_CT_TEMPLATE_STORAGE (local), AURUM_CT_BRIDGE (vmbr0),
+#   AURUM_CT_DISK_GB (4), AURUM_CT_MEMORY (1024), AURUM_CT_CORES (2),
+#   AURUM_CT_IP (dhcp — or e.g. 192.168.1.50/24), AURUM_CT_GW,
+#   AURUM_ON_HOST=1 to skip the container offer and install on the host.
 # ---------------------------------------------------------------------------
 set -euo pipefail
 
 REPO_URL="${AURUM_REPO:-https://github.com/ssan9876/aurum-finance.git}"
 BRANCH="${AURUM_BRANCH:-main}"
+RAW_BASE="https://raw.githubusercontent.com/ssan9876/aurum-finance/$BRANCH"
 INSTALL_DIR="/opt/aurum"
 DATA_DIR="/var/lib/aurum"
 ENV_DIR="/etc/aurum"
 PORT="${AURUM_PORT:-5533}"
 SERVICE_USER="aurum"
+LOG="/tmp/aurum-install.log"
 
 C_GREEN='\033[0;32m'; C_YELLOW='\033[1;33m'; C_RED='\033[0;31m'; C_OFF='\033[0m'
 info()  { echo -e "${C_GREEN}[aurum]${C_OFF} $*"; }
 warn()  { echo -e "${C_YELLOW}[aurum]${C_OFF} $*"; }
 fail()  { echo -e "${C_RED}[aurum]${C_OFF} $*" >&2; exit 1; }
+# Run a noisy command with its output captured to $LOG.
+quiet() { "$@" >>"$LOG" 2>&1 || fail "Command failed: $* — details in $LOG"; }
 
 [ "$(id -u)" -eq 0 ] || fail "Run as root (sudo bash install.sh)."
+: > "$LOG"
+
+# --------------------------- Proxmox host support ---------------------------
+# Running on a Proxmox VE host (not inside a container)? Offer to create a
+# dedicated LXC container instead of installing onto the hypervisor.
+
+is_proxmox_host() {
+  command -v pct >/dev/null 2>&1 && [ -d /etc/pve ] &&
+    ! grep -qa 'container=lxc' /proc/1/environ 2>/dev/null
+}
+
+fetch_self() {
+  # The script body — works both when run from a file and via curl|bash -c.
+  curl -fsSL "$RAW_BASE/install.sh" 2>/dev/null || cat "$0" 2>/dev/null
+}
+
+create_container() {
+  local ctid hostname storage tstorage bridge disk mem cores net template password ip
+  ctid="${AURUM_CT_ID:-$(pvesh get /cluster/nextid)}"
+  hostname="${AURUM_CT_HOSTNAME:-aurum}"
+  storage="${AURUM_CT_STORAGE:-local-lvm}"
+  tstorage="${AURUM_CT_TEMPLATE_STORAGE:-local}"
+  bridge="${AURUM_CT_BRIDGE:-vmbr0}"
+  disk="${AURUM_CT_DISK_GB:-4}"
+  mem="${AURUM_CT_MEMORY:-1024}"
+  cores="${AURUM_CT_CORES:-2}"
+  net="name=eth0,bridge=$bridge,ip=${AURUM_CT_IP:-dhcp}"
+  [ -n "${AURUM_CT_GW:-}" ] && net="$net,gw=$AURUM_CT_GW"
+
+  # Ask for the app password up front so the in-container install runs unattended.
+  password=""
+  if [ -t 0 ]; then
+    read -rsp "$(echo -e "${C_YELLOW}[aurum]${C_OFF} Set an access password for Aurum (leave empty for none): ")" password
+    echo
+  fi
+
+  info "Finding the newest Debian 12 LXC template…"
+  quiet pveam update
+  template="$(pveam available --section system 2>/dev/null | awk '{print $2}' | grep '^debian-12-standard' | sort -V | tail -1)"
+  [ -n "$template" ] || fail "No debian-12-standard template offered by pveam — check host internet access."
+  if ! pveam list "$tstorage" 2>/dev/null | grep -q "$template"; then
+    info "Downloading $template to '$tstorage'…"
+    quiet pveam download "$tstorage" "$template"
+  fi
+
+  info "Creating LXC container $ctid ('$hostname': ${cores} cores, ${mem}MB RAM, ${disk}GB on $storage)…"
+  quiet pct create "$ctid" "$tstorage:vztmpl/$template" \
+    --hostname "$hostname" --memory "$mem" --cores "$cores" \
+    --rootfs "$storage:$disk" --net0 "$net" \
+    --unprivileged 1 --features nesting=1 --onboot 1 --start 1 --tags aurum
+
+  info "Waiting for the container network…"
+  local i ok=false
+  for i in $(seq 1 45); do
+    if pct exec "$ctid" -- sh -c 'ip -4 -o addr show dev eth0 2>/dev/null | grep -q "inet "'; then
+      ok=true; break
+    fi
+    sleep 1
+  done
+  $ok || warn "Container network is slow to come up — continuing anyway."
+
+  info "Bootstrapping Aurum inside container $ctid (a few minutes)…"
+  quiet pct exec "$ctid" -- bash -c 'apt-get update -qq && apt-get install -y -qq curl ca-certificates'
+  local script
+  script="$(fetch_self)"
+  [ -n "$script" ] || fail "Could not fetch the installer to run inside the container."
+  pct exec "$ctid" -- env AURUM_PASSWORD_PRESET="$password" \
+    AURUM_REPO="$REPO_URL" AURUM_BRANCH="$BRANCH" AURUM_PORT="$PORT" \
+    bash -c "$script"
+
+  ip="$(pct exec "$ctid" -- hostname -I 2>/dev/null | awk '{print $1}')"
+  info "──────────────────────────────────────────────"
+  info "Aurum is running in LXC container $ctid  →  http://${ip:-<container-ip>}:$PORT"
+  info "Console:  pct enter $ctid   (then type  update  to update Aurum)"
+  info "Remove:   pct stop $ctid && pct destroy $ctid"
+  info "──────────────────────────────────────────────"
+}
+
+if is_proxmox_host && [ "${AURUM_ON_HOST:-0}" != "1" ] && [ ! -d "$INSTALL_DIR/.git" ]; then
+  EXISTING_CT="$(pct list 2>/dev/null | awk 'NR>1 && $NF=="aurum" {print $1; exit}')"
+  if [ -n "$EXISTING_CT" ]; then
+    info "Found existing 'aurum' container (CT $EXISTING_CT) — updating Aurum inside it."
+    SCRIPT="$(fetch_self)"
+    pct exec "$EXISTING_CT" -- bash -c "$SCRIPT"
+    exit 0
+  fi
+  MAKE_CT="y"
+  if [ -t 0 ]; then
+    read -rp "$(echo -e "${C_YELLOW}[aurum]${C_OFF} You're on a Proxmox host — create a dedicated LXC container for Aurum? [Y/n] ")" MAKE_CT
+    MAKE_CT="${MAKE_CT:-y}"
+  fi
+  case "$MAKE_CT" in
+    [Yy]*) create_container; exit 0 ;;
+    *) warn "Installing directly on the Proxmox host (set AURUM_ON_HOST=1 to skip this question next time)." ;;
+  esac
+fi
+
+# ------------------------------ regular install ------------------------------
 command -v apt-get >/dev/null 2>&1 || fail "This installer targets Debian/Ubuntu (apt)."
 
 UPDATE=false
 [ -d "$INSTALL_DIR/.git" ] && UPDATE=true
 
 info "Installing prerequisites…"
-apt-get update -qq
-apt-get install -y -qq curl git ca-certificates >/dev/null
+quiet apt-get update -qq
+quiet apt-get install -y -qq curl git ca-certificates
 
 # --- Node.js 20+ -----------------------------------------------------------
 NEED_NODE=true
@@ -47,19 +160,19 @@ if command -v node >/dev/null 2>&1; then
 fi
 if $NEED_NODE; then
   info "Installing Node.js 22 (NodeSource)…"
-  curl -fsSL https://deb.nodesource.com/setup_22.x | bash - >/dev/null
-  apt-get install -y -qq nodejs >/dev/null
+  quiet bash -c 'curl -fsSL https://deb.nodesource.com/setup_22.x | bash -'
+  quiet apt-get install -y -qq nodejs
 fi
 info "Node $(node -v), npm $(npm -v)"
 
 # --- fetch source ----------------------------------------------------------
 if $UPDATE; then
   info "Updating existing install in $INSTALL_DIR…"
-  git -C "$INSTALL_DIR" fetch --depth 1 origin "$BRANCH"
-  git -C "$INSTALL_DIR" reset --hard "origin/$BRANCH"
+  git -C "$INSTALL_DIR" fetch --depth 1 origin "$BRANCH" 2>>"$LOG"
+  git -C "$INSTALL_DIR" reset --hard "origin/$BRANCH" >>"$LOG" 2>&1
 else
   info "Cloning $REPO_URL…"
-  git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$INSTALL_DIR"
+  quiet git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$INSTALL_DIR"
 fi
 cd "$INSTALL_DIR"
 
@@ -67,14 +180,14 @@ cd "$INSTALL_DIR"
 info "Installing dependencies (this skips the Electron binary)…"
 export ELECTRON_SKIP_BINARY_DOWNLOAD=1
 if [ -f package-lock.json ]; then
-  npm ci --no-audit --no-fund >/dev/null
+  quiet npm ci --no-audit --no-fund --loglevel=error
 else
-  npm install --no-audit --no-fund >/dev/null
+  quiet npm install --no-audit --no-fund --loglevel=error
 fi
 
 info "Building web app and server…"
-npm run build:web >/dev/null
-npm run build:server >/dev/null
+quiet npm run build:web
+quiet npm run build:server
 
 # --- database --------------------------------------------------------------
 # User data lives in $DATA_DIR and $ENV_DIR — never recreated on update.
@@ -84,14 +197,17 @@ if systemctl is-active --quiet aurum.service 2>/dev/null; then
   systemctl stop aurum.service
 fi
 info "Syncing database schema at $DATA_DIR/aurum.db (existing data is kept)…"
-DATABASE_URL="file:$DATA_DIR/aurum.db" npx prisma db push --skip-generate >/dev/null
+quiet env DATABASE_URL="file:$DATA_DIR/aurum.db" PRISMA_HIDE_UPDATE_MESSAGE=1 npx prisma db push --skip-generate
 
 # --- service user + env ----------------------------------------------------
 id -u "$SERVICE_USER" >/dev/null 2>&1 || useradd --system --home "$DATA_DIR" --shell /usr/sbin/nologin "$SERVICE_USER"
 
 if [ ! -f "$ENV_DIR/aurum.env" ]; then
   PASSWORD=""
-  if [ -t 0 ]; then
+  if [ "${AURUM_PASSWORD_PRESET+x}" = "x" ]; then
+    # Provided by the Proxmox container bootstrap — don't prompt again.
+    PASSWORD="$AURUM_PASSWORD_PRESET"
+  elif [ -t 0 ]; then
     read -rsp "$(echo -e "${C_YELLOW}[aurum]${C_OFF} Set an access password (leave empty for none): ")" PASSWORD
     echo
   fi

@@ -19,8 +19,12 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/ssan9876/aurum-finance/m
 
 The installer sets up Node 22, builds the app into `/opt/aurum`, creates the
 SQLite database at `/var/lib/aurum/aurum.db`, asks for an optional access
-password, and starts a hardened `systemd` service on port **5533**. Re-run the
-same command any time to update. Logs: `journalctl -u aurum -f`.
+password, and starts a hardened `systemd` service on port **5533**.
+Logs: `journalctl -u aurum -f`.
+
+**Updating:** just type `update` in the container's console. It pulls the
+latest version, rebuilds and restarts the service — your data
+(`/var/lib/aurum`) and settings (`/etc/aurum/aurum.env`) are always kept.
 
 > The server binds to your LAN over plain HTTP. Set a password during install,
 > and put a TLS reverse proxy (Caddy/NPM/Traefik) in front if you expose it

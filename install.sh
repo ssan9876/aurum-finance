@@ -77,8 +77,13 @@ npm run build:web >/dev/null
 npm run build:server >/dev/null
 
 # --- database --------------------------------------------------------------
+# User data lives in $DATA_DIR and $ENV_DIR — never recreated on update.
 mkdir -p "$DATA_DIR" "$ENV_DIR"
-info "Syncing database schema at $DATA_DIR/aurum.db…"
+if systemctl is-active --quiet aurum.service 2>/dev/null; then
+  info "Stopping service for database sync…"
+  systemctl stop aurum.service
+fi
+info "Syncing database schema at $DATA_DIR/aurum.db (existing data is kept)…"
 DATABASE_URL="file:$DATA_DIR/aurum.db" npx prisma db push --skip-generate >/dev/null
 
 # --- service user + env ----------------------------------------------------
@@ -132,7 +137,29 @@ WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
-systemctl enable --now aurum.service
+systemctl enable aurum.service >/dev/null 2>&1
+systemctl restart aurum.service
+
+# --- 'update' console command -----------------------------------------------
+UPDATE_CMD=/usr/bin/update
+if [ -e "$UPDATE_CMD" ] && ! grep -q "Update Aurum" "$UPDATE_CMD" 2>/dev/null; then
+  warn "/usr/bin/update exists and isn't ours — installing as /usr/bin/aurum-update instead."
+  UPDATE_CMD=/usr/bin/aurum-update
+fi
+cat > "$UPDATE_CMD" <<UPD
+#!/usr/bin/env bash
+# Update Aurum: pull the latest version and redeploy.
+# User data is kept — the installer never touches $DATA_DIR or $ENV_DIR.
+set -euo pipefail
+echo "[aurum] fetching latest installer…"
+if script="\$(curl -fsSL ${REPO_URL%.git}/raw/$BRANCH/install.sh || curl -fsSL https://raw.githubusercontent.com/ssan9876/aurum-finance/$BRANCH/install.sh)"; then
+  exec bash -c "\$script"
+else
+  echo "[aurum] couldn't fetch the installer — falling back to the local copy"
+  exec bash $INSTALL_DIR/install.sh
+fi
+UPD
+chmod +x "$UPDATE_CMD"
 
 sleep 1
 if systemctl is-active --quiet aurum.service; then
@@ -142,7 +169,7 @@ if systemctl is-active --quiet aurum.service; then
   info "Data:     $DATA_DIR/aurum.db"
   info "Config:   $ENV_DIR/aurum.env  (password, port)"
   info "Logs:     journalctl -u aurum -f"
-  info "Update:   re-run this installer"
+  info "Update:   just type  ${UPDATE_CMD##*/}  in this console"
   info "──────────────────────────────────────────────"
 else
   fail "Service failed to start — check: journalctl -u aurum -e"

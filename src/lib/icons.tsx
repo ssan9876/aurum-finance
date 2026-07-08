@@ -1,0 +1,113 @@
+/**
+ * Curated icon registry. Category/account icons are stored as string names;
+ * this maps them to Lucide components (explicit imports keep the bundle lean).
+ */
+import {
+  Banknote,
+  Briefcase,
+  Building2,
+  Bus,
+  Car,
+  CircleDashed,
+  CircleDollarSign,
+  CircleEllipsis,
+  Clapperboard,
+  Coffee,
+  CreditCard,
+  Dumbbell,
+  Fuel,
+  Gamepad2,
+  Gift,
+  GraduationCap,
+  HandCoins,
+  HeartPulse,
+  Home,
+  Landmark,
+  Laptop,
+  Music,
+  PawPrint,
+  Phone,
+  PiggyBank,
+  Pill,
+  Plane,
+  PlugZap,
+  Repeat,
+  Scissors,
+  Shield,
+  ShieldCheck,
+  Shirt,
+  ShoppingBag,
+  ShoppingCart,
+  Sparkles,
+  TrendingUp,
+  Trophy,
+  Umbrella,
+  Utensils,
+  UtensilsCrossed,
+  Wallet,
+  Wifi,
+  Wrench,
+  type LucideIcon,
+} from 'lucide-react';
+
+export const ICONS: Record<string, LucideIcon> = {
+  home: Home,
+  'plug-zap': PlugZap,
+  car: Car,
+  bus: Bus,
+  fuel: Fuel,
+  utensils: Utensils,
+  'utensils-crossed': UtensilsCrossed,
+  'shopping-cart': ShoppingCart,
+  'shopping-bag': ShoppingBag,
+  shirt: Shirt,
+  clapperboard: Clapperboard,
+  gamepad: Gamepad2,
+  music: Music,
+  'heart-pulse': HeartPulse,
+  pill: Pill,
+  shield: Shield,
+  'shield-check': ShieldCheck,
+  'graduation-cap': GraduationCap,
+  repeat: Repeat,
+  wifi: Wifi,
+  phone: Phone,
+  plane: Plane,
+  umbrella: Umbrella,
+  'paw-print': PawPrint,
+  'trending-up': TrendingUp,
+  landmark: Landmark,
+  gift: Gift,
+  banknote: Banknote,
+  'piggy-bank': PiggyBank,
+  'circle-ellipsis': CircleEllipsis,
+  'circle-dashed': CircleDashed,
+  'circle-dollar': CircleDollarSign,
+  wallet: Wallet,
+  'credit-card': CreditCard,
+  briefcase: Briefcase,
+  building: Building2,
+  laptop: Laptop,
+  coffee: Coffee,
+  dumbbell: Dumbbell,
+  scissors: Scissors,
+  wrench: Wrench,
+  sparkles: Sparkles,
+  trophy: Trophy,
+  'hand-coins': HandCoins,
+};
+
+export const ICON_NAMES = Object.keys(ICONS);
+
+export function EntityIcon({
+  name,
+  className,
+  style,
+}: {
+  name?: string | null;
+  className?: string;
+  style?: React.CSSProperties;
+}) {
+  const Icon = (name && ICONS[name]) || CircleDollarSign;
+  return <Icon className={className} style={style} aria-hidden="true" />;
+}

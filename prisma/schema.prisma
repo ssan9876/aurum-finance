@@ -1,0 +1,189 @@
+// Aurum — local-first personal finance data model (SQLite).
+// Monetary amounts are stored as floats and rounded to 2 decimals at the
+// service boundary; dates cross the IPC boundary as ISO strings.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Single row today; keyed so cloud sync / multi-user can attach later.
+model User {
+  id        String   @id @default(cuid())
+  name      String   @default("Me")
+  email     String?
+  createdAt DateTime @default(now())
+}
+
+model Account {
+  id           String        @id @default(cuid())
+  name         String
+  type         String        @default("checking") // checking | savings | credit | cash | investment
+  startBalance Float         @default(0)
+  color        String?
+  icon         String?
+  archived     Boolean       @default(false)
+  sortOrder    Int           @default(0)
+  createdAt    DateTime      @default(now())
+  transactions Transaction[] @relation("AccountTransactions")
+  transfersIn  Transaction[] @relation("TransferTarget")
+  bills        Bill[]
+}
+
+model IncomeSource {
+  id          String    @id @default(cuid())
+  name        String
+  amount      Float
+  frequency   String    @default("monthly") // weekly | biweekly | twicemonthly | monthly | quarterly | yearly | onetime
+  active      Boolean   @default(true)
+  nextPayDate DateTime?
+  color       String?
+  notes       String?
+  createdAt   DateTime  @default(now())
+}
+
+model Category {
+  id              String        @id @default(cuid())
+  name            String
+  type            String        @default("expense") // expense | income
+  color           String        @default("#6366f1")
+  icon            String        @default("circle")
+  parentId        String?
+  parent          Category?     @relation("Subcategories", fields: [parentId], references: [id], onDelete: Cascade)
+  children        Category[]    @relation("Subcategories")
+  sortOrder       Int           @default(0)
+  isDefault       Boolean       @default(false)
+  createdAt       DateTime      @default(now())
+  transactions    Transaction[] @relation("TxCategory")
+  subTransactions Transaction[] @relation("TxSubcategory")
+  budgets         Budget[]
+  bills           Bill[]
+}
+
+model Transaction {
+  id            String       @id @default(cuid())
+  date          DateTime
+  amount        Float
+  type          String       @default("expense") // expense | income | transfer
+  merchant      String       @default("")
+  description   String?
+  categoryId    String?
+  category      Category?    @relation("TxCategory", fields: [categoryId], references: [id], onDelete: SetNull)
+  subcategoryId String?
+  subcategory   Category?    @relation("TxSubcategory", fields: [subcategoryId], references: [id], onDelete: SetNull)
+  paymentMethod String?
+  accountId     String?
+  account       Account?     @relation("AccountTransactions", fields: [accountId], references: [id], onDelete: SetNull)
+  toAccountId   String? // transfer destination
+  toAccount     Account?     @relation("TransferTarget", fields: [toAccountId], references: [id], onDelete: SetNull)
+  tags          String       @default("[]") // JSON-encoded string[]
+  recurring     Boolean      @default(false)
+  receiptImage  String? // data URL
+  notes         String?
+  externalId    String? // provider/bank id (OFX FITID) for import dedup
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  attachments   Attachment[]
+
+  @@index([date])
+  @@index([categoryId])
+  @@index([accountId])
+  @@index([externalId])
+}
+
+model SavingsAccount {
+  id                  String            @id @default(cuid())
+  name                String
+  balance             Float             @default(0)
+  goal                Float?
+  goalDate            DateTime?
+  monthlyContribution Float             @default(0)
+  interestRate        Float             @default(0) // APY, percent
+  color               String?
+  icon                String?
+  sortOrder           Int               @default(0)
+  createdAt           DateTime          @default(now())
+  snapshots           SavingsSnapshot[]
+  goals               Goal[]
+}
+
+model SavingsSnapshot {
+  id               String         @id @default(cuid())
+  savingsAccountId String
+  savingsAccount   SavingsAccount @relation(fields: [savingsAccountId], references: [id], onDelete: Cascade)
+  date             DateTime       @default(now())
+  balance          Float
+
+  @@index([savingsAccountId, date])
+}
+
+// month/year null → recurring template for every month/year of the period;
+// a row with a concrete month+year overrides the template for that slot.
+model Budget {
+  id         String   @id @default(cuid())
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  amount     Float
+  period     String   @default("monthly") // monthly | yearly
+  month      Int? // 1-12
+  year       Int?
+  createdAt  DateTime @default(now())
+}
+
+model Bill {
+  id           String    @id @default(cuid())
+  name         String
+  amount       Float
+  dueDate      DateTime
+  frequency    String    @default("monthly") // weekly | biweekly | monthly | quarterly | yearly | once
+  autoPay      Boolean   @default(false)
+  reminderDays Int       @default(3)
+  categoryId   String?
+  category     Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  accountId    String?
+  account      Account?  @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  notes        String?
+  lastPaidDate DateTime?
+  createdAt    DateTime  @default(now())
+}
+
+model Goal {
+  id               String          @id @default(cuid())
+  name             String
+  type             String          @default("savings") // savings | debt | purchase | custom
+  targetAmount     Float
+  currentAmount    Float           @default(0)
+  targetDate       DateTime?
+  savingsAccountId String? // when linked, progress mirrors the savings account
+  savingsAccount   SavingsAccount? @relation(fields: [savingsAccountId], references: [id], onDelete: SetNull)
+  color            String?
+  icon             String?
+  notes            String?
+  completedAt      DateTime?
+  createdAt        DateTime        @default(now())
+}
+
+model Tag {
+  id    String  @id @default(cuid())
+  name  String  @unique
+  color String?
+}
+
+model Setting {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String // JSON-encoded
+}
+
+model Attachment {
+  id            String      @id @default(cuid())
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  fileName      String
+  data          String // base64 data URL
+  createdAt     DateTime    @default(now())
+}

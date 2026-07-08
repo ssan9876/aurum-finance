@@ -1,0 +1,219 @@
+@import '@fontsource-variable/inter/index.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  Theme tokens. Semantic slots follow the shadcn convention (HSL triplets).
+  Chart series colors (--chart-1..8) are a CVD-validated categorical palette
+  with separately-selected dark-mode steps (not an automatic flip).
+*/
+@layer base {
+  :root {
+    --background: 40 20% 98%;
+    --foreground: 240 10% 6%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 6%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 6%;
+    --secondary: 240 5% 95%;
+    --secondary-foreground: 240 6% 10%;
+    --muted: 240 5% 95%;
+    --muted-foreground: 240 4% 42%;
+    --accent: 240 5% 94%;
+    --accent-foreground: 240 6% 10%;
+    --destructive: 0 72% 45%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 142 72% 26%;
+    --success-foreground: 0 0% 100%;
+    --warning: 32 95% 38%;
+    --warning-foreground: 0 0% 100%;
+    --border: 240 6% 89%;
+    --input: 240 6% 85%;
+    --radius: 0.625rem;
+    --sidebar: 240 8% 97%;
+    --sidebar-foreground: 240 10% 6%;
+
+    /* Categorical chart series (light surface) */
+    --chart-1: #2a78d6;
+    --chart-2: #1baf7a;
+    --chart-3: #eda100;
+    --chart-4: #008300;
+    --chart-5: #4a3aa7;
+    --chart-6: #e34948;
+    --chart-7: #e87ba4;
+    --chart-8: #eb6834;
+    --chart-grid: #e7e6e0;
+    --chart-axis: #898781;
+    --chart-positive: #1baf7a;
+    --chart-negative: #e34948;
+  }
+
+  .dark {
+    --background: 240 8% 5%;
+    --foreground: 0 0% 98%;
+    --card: 240 6% 8%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 6% 8%;
+    --popover-foreground: 0 0% 98%;
+    --secondary: 240 5% 13%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 5% 13%;
+    --muted-foreground: 240 5% 62%;
+    --accent: 240 5% 14%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 72% 58%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 142 60% 45%;
+    --success-foreground: 240 10% 6%;
+    --warning: 38 92% 55%;
+    --warning-foreground: 240 10% 6%;
+    --border: 240 5% 16%;
+    --input: 240 5% 20%;
+    --sidebar: 240 7% 7%;
+    --sidebar-foreground: 0 0% 98%;
+
+    /* Same hues, re-stepped for the dark surface */
+    --chart-1: #3987e5;
+    --chart-2: #199e70;
+    --chart-3: #c98500;
+    --chart-4: #4caf50;
+    --chart-5: #9085e9;
+    --chart-6: #e66767;
+    --chart-7: #d55181;
+    --chart-8: #d95926;
+    --chart-grid: #26262a;
+    --chart-axis: #898781;
+    --chart-positive: #34c98e;
+    --chart-negative: #e66767;
+  }
+
+  /* Accent (primary) color — user-selectable in Settings via data-accent. */
+  :root,
+  :root[data-accent='indigo'] {
+    --primary: 243 66% 54%;
+    --primary-foreground: 0 0% 100%;
+    --ring: 243 66% 54%;
+  }
+  :root[data-accent='violet'] {
+    --primary: 262 72% 52%;
+    --primary-foreground: 0 0% 100%;
+    --ring: 262 72% 52%;
+  }
+  :root[data-accent='blue'] {
+    --primary: 212 84% 45%;
+    --primary-foreground: 0 0% 100%;
+    --ring: 212 84% 45%;
+  }
+  :root[data-accent='emerald'] {
+    --primary: 158 84% 28%;
+    --primary-foreground: 0 0% 100%;
+    --ring: 158 84% 28%;
+  }
+  :root[data-accent='rose'] {
+    --primary: 347 77% 46%;
+    --primary-foreground: 0 0% 100%;
+    --ring: 347 77% 46%;
+  }
+  :root[data-accent='amber'] {
+    --primary: 26 90% 42%;
+    --primary-foreground: 0 0% 100%;
+    --ring: 26 90% 42%;
+  }
+  :root.dark,
+  :root.dark[data-accent='indigo'] {
+    --primary: 240 84% 67%;
+    --primary-foreground: 240 10% 6%;
+    --ring: 240 84% 67%;
+  }
+  :root.dark[data-accent='violet'] {
+    --primary: 262 83% 68%;
+    --primary-foreground: 240 10% 6%;
+    --ring: 262 83% 68%;
+  }
+  :root.dark[data-accent='blue'] {
+    --primary: 212 92% 62%;
+    --primary-foreground: 240 10% 6%;
+    --ring: 212 92% 62%;
+  }
+  :root.dark[data-accent='emerald'] {
+    --primary: 158 64% 48%;
+    --primary-foreground: 240 10% 6%;
+    --ring: 158 64% 48%;
+  }
+  :root.dark[data-accent='rose'] {
+    --primary: 350 89% 66%;
+    --primary-foreground: 240 10% 6%;
+    --ring: 350 89% 66%;
+  }
+  :root.dark[data-accent='amber'] {
+    --primary: 38 92% 58%;
+    --primary-foreground: 240 10% 6%;
+    --ring: 38 92% 58%;
+  }
+
+  * {
+    @apply border-border;
+  }
+  html {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    @apply bg-background text-foreground font-sans;
+    font-feature-settings: 'cv11';
+  }
+  ::selection {
+    background: hsl(var(--primary) / 0.2);
+  }
+
+  /* Slim scrollbars that match the theme */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.25);
+    border-radius: 6px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.45);
+    background-clip: content-box;
+    border: 2px solid transparent;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer utilities {
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+  /* Staggered entrance for dashboard grids */
+  .stagger-children > * {
+    animation: fade-up 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .stagger-children > *:nth-child(1) { animation-delay: 0ms; }
+  .stagger-children > *:nth-child(2) { animation-delay: 30ms; }
+  .stagger-children > *:nth-child(3) { animation-delay: 60ms; }
+  .stagger-children > *:nth-child(4) { animation-delay: 90ms; }
+  .stagger-children > *:nth-child(5) { animation-delay: 120ms; }
+  .stagger-children > *:nth-child(6) { animation-delay: 150ms; }
+  .stagger-children > *:nth-child(7) { animation-delay: 180ms; }
+  .stagger-children > *:nth-child(8) { animation-delay: 210ms; }
+  .stagger-children > *:nth-child(n + 9) { animation-delay: 240ms; }
+}

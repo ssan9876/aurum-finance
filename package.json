@@ -1,0 +1,109 @@
+{
+  "name": "aurum-finance",
+  "productName": "Aurum",
+  "description": "Aurum — local-first personal finance: budgets, bills, savings goals and analytics.",
+  "version": "1.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist-electron/main.js",
+  "author": "Seth Sander",
+  "scripts": {
+    "predev": "prisma db push",
+    "dev": "vite",
+    "dev:web": "vite --mode web",
+    "build": "tsc -b && vite build",
+    "build:web": "tsc -b && vite build --mode web",
+    "build:server": "esbuild server/index.ts --bundle --platform=node --format=cjs --outfile=dist-server/index.cjs --external:@prisma/client --external:.prisma",
+    "start": "node dist-server/index.cjs",
+    "dist": "npm run build && electron-builder",
+    "prisma:generate": "prisma generate",
+    "prisma:push": "prisma db push",
+    "postinstall": "prisma generate",
+    "preview:web": "vite preview --mode web"
+  },
+  "dependencies": {
+    "@fontsource-variable/inter": "^5.1.0",
+    "@prisma/client": "^5.22.0",
+    "@radix-ui/react-alert-dialog": "^1.1.1",
+    "@radix-ui/react-checkbox": "^1.1.1",
+    "@radix-ui/react-dialog": "^1.1.1",
+    "@radix-ui/react-dropdown-menu": "^2.1.1",
+    "@radix-ui/react-label": "^2.1.0",
+    "@radix-ui/react-popover": "^1.1.1",
+    "@radix-ui/react-progress": "^1.1.0",
+    "@radix-ui/react-select": "^2.1.1",
+    "@radix-ui/react-slot": "^1.1.0",
+    "@radix-ui/react-switch": "^1.1.0",
+    "@radix-ui/react-tabs": "^1.1.0",
+    "@radix-ui/react-tooltip": "^1.1.2",
+    "@tanstack/react-query": "^5.59.0",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.1",
+    "cmdk": "^1.0.0",
+    "date-fns": "^3.6.0",
+    "express": "^4.21.0",
+    "framer-motion": "^11.5.4",
+    "lucide-react": "^0.446.0",
+    "papaparse": "^5.4.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.2",
+    "recharts": "^2.13.0",
+    "sonner": "^1.5.0",
+    "tailwind-merge": "^2.5.2",
+    "xlsx": "^0.18.5",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.7.0",
+    "@types/papaparse": "^5.3.14",
+    "@types/react": "^18.3.9",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.20",
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0",
+    "postcss": "^8.4.47",
+    "prisma": "^5.22.0",
+    "tailwindcss": "^3.4.13",
+    "tailwindcss-animate": "^1.0.7",
+    "typescript": "^5.6.2",
+    "vite": "^5.4.8",
+    "vite-plugin-electron": "^0.28.8"
+  },
+  "build": {
+    "appId": "com.aurum.finance",
+    "productName": "Aurum",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "dist-electron/**"
+    ],
+    "asarUnpack": [
+      "node_modules/.prisma/**",
+      "node_modules/@prisma/client/**"
+    ],
+    "extraResources": [
+      {
+        "from": "prisma/template.db",
+        "to": "template.db"
+      }
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "category": "public.app-category.finance"
+    }
+  },
+  "allowScripts": {
+    "@prisma/client@5.22.0": true,
+    "@prisma/engines@5.22.0": true,
+    "electron@33.4.11": true,
+    "esbuild@0.21.5": true,
+    "prisma@5.22.0": true
+  }
+}

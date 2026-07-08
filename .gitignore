@@ -1,0 +1,10 @@
+node_modules
+dist
+dist-electron
+dist-server
+release
+prisma/dev.db
+prisma/dev.db-journal
+prisma/template.db
+*.local
+.DS_Store

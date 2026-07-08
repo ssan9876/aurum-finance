@@ -1,0 +1,32 @@
+{
+  "name": "Aurum — Personal Finance",
+  "short_name": "Aurum",
+  "description": "Local-first personal finance: budgets, bills, savings goals and analytics.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0c0f13",
+  "theme_color": "#0c0f13",
+  "icons": [
+    {
+      "src": "/icons/aurum.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/aurum-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Add transaction",
+      "short_name": "Add",
+      "url": "/?add=tx#/transactions",
+      "icons": [{ "src": "/icons/aurum.svg", "sizes": "any", "type": "image/svg+xml" }]
+    }
+  ]
+}

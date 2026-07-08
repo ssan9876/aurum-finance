@@ -26,6 +26,9 @@ import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ConfirmDialog, Field, PageHeader } from '@/components/shared';
+import { RulesCard } from '@/components/settings/RulesCard';
+import { BankSyncCard } from '@/components/settings/BankSyncCard';
+import { AutomationCard } from '@/components/settings/AutomationCard';
 import { useSettings } from '@/state/settings';
 import { useAccounts, useCategories, useRefreshAll, useTransactions } from '@/data/hooks';
 import { api, backendMode } from '@/data/api';
@@ -242,6 +245,17 @@ export default function Settings() {
           </CardContent>
         </Card>
 
+        {/* Auto-categorization rules */}
+        <RulesCard />
+
+        {/* Server-only: bank sync + daily automation */}
+        {backendMode === 'server' && (
+          <>
+            <BankSyncCard />
+            <AutomationCard />
+          </>
+        )}
+
         {/* Data */}
         <Card className="animate-fade-up">
           <CardHeader>
@@ -314,7 +328,7 @@ export default function Settings() {
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground space-y-2">
             <p className="flex items-center gap-2">
-              Aurum <Badge variant="secondary">v1.1.0</Badge>
+              Aurum <Badge variant="secondary">v1.3.0</Badge>
               <Badge variant="outline">
                 {backendMode === 'desktop'
                   ? 'Desktop · SQLite'

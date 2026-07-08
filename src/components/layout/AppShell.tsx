@@ -142,6 +142,15 @@ export function AppShell() {
   const location = useLocation();
   const [mobileNavOpen, setMobileNavOpen] = React.useState(false);
 
+  // PWA shortcut ("Add transaction" on the home-screen icon) lands on
+  // /?add=tx — open quick-add once and scrub the param.
+  React.useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('add') !== 'tx') return;
+    window.history.replaceState(null, '', window.location.pathname + window.location.hash);
+    ui.setQuickTxOpen(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   /* ------------------------- keyboard shortcuts -------------------------- */
   const pendingG = React.useRef(0);
   React.useEffect(() => {

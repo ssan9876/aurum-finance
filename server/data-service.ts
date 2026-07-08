@@ -15,10 +15,14 @@ const ORDER_BY: Partial<Record<EntityName, object | object[]>> = {
   savingsAccount: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
   savingsSnapshot: { date: 'asc' },
   bill: { dueDate: 'asc' },
+  // No createdAt column on these two — the default sort would throw.
+  tag: { name: 'asc' },
+  setting: { key: 'asc' },
 };
 
 const MONEY_FIELDS = new Set([
   'amount',
+  'grossAmount',
   'balance',
   'startBalance',
   'goal',

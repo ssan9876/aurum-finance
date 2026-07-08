@@ -83,7 +83,7 @@ const EMPTY_STORE: Store = {
 /** Column defaults, mirroring the Prisma schema for adapter parity. */
 const LOCAL_DEFAULTS: Partial<Record<EntityName, Record<string, unknown>>> = {
   account: { type: 'checking', startBalance: 0, color: null, icon: null, archived: false, sortOrder: 0 },
-  incomeSource: { frequency: 'monthly', active: true, nextPayDate: null, color: null, notes: null },
+  incomeSource: { grossAmount: null, frequency: 'monthly', active: true, nextPayDate: null, color: null, notes: null },
   category: { type: 'expense', color: '#6366f1', icon: 'circle', parentId: null, sortOrder: 0, isDefault: false },
   transaction: {
     type: 'expense',
@@ -108,7 +108,7 @@ const LOCAL_DEFAULTS: Partial<Record<EntityName, Record<string, unknown>>> = {
 };
 
 const MONEY_FIELDS = new Set([
-  'amount', 'balance', 'startBalance', 'goal', 'monthlyContribution', 'targetAmount', 'currentAmount',
+  'amount', 'grossAmount', 'balance', 'startBalance', 'goal', 'monthlyContribution', 'targetAmount', 'currentAmount',
 ]);
 
 const SORTERS: Partial<Record<EntityName, (a: any, b: any) => number>> = {

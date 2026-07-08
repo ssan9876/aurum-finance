@@ -102,7 +102,19 @@ adapter without touching the UI.
   and most banks: transactions dedupe automatically via the bank's `FITID`, so
   re-importing overlapping date ranges is safe. CSV import has column mapping,
   **saved presets** per institution, and fuzzy duplicate skipping.
-- **Income** — unlimited sources, any pay frequency, live monthly/annual math.
+- **Bank sync (self-hosted)** — connect [SimpleFIN Bridge](https://bridge.simplefin.org)
+  with a one-time setup token and your server pulls new transactions daily (or
+  on demand), deduped and auto-categorized. Accounts map automatically.
+- **Auto-categorization** — Aurum learns merchant → category pairs every time
+  you categorize by hand, then applies them to imports, bank sync, quick-add
+  (live prefill as you type) and AI-entered transactions. Rules are inspectable
+  and deletable in Settings.
+- **Automation (self-hosted)** — daily server jobs: auto-pay bills post and
+  advance on their due date (opt-in), recurring income posts its net pay
+  (opt-in), savings snapshots on the 1st, and a rotating 14-day JSON backup.
+- **PWA** — install the web app to your phone's home screen; a long-press
+  shortcut jumps straight into "Add transaction". API calls are never cached.
+- **Income** — unlimited sources, any pay frequency, live monthly/annual math. Gross + net pay per source: net auto-calculates from gross and a deduction %, and correcting net by hand re-derives the effective rate.
 - **Budgets** — recurring templates + per-month overrides, month navigator,
   alerts at 90% and over-budget.
 - **Bills** — due dates, auto-pay, reminder windows, one-click *mark paid* (logs
@@ -136,10 +148,25 @@ adapter without touching the UI.
 - Browser fallback: `localStorage` under `aurum.web.db`.
 - Settings → Data: JSON backup/restore, CSV/Excel export, demo data, full erase.
 
+## AI integration (MCP)
+
+The self-hosted server exposes an [MCP](https://modelcontextprotocol.io) endpoint at `POST /mcp`, so any MCP-capable AI can connect directly to your Aurum instance. Paste a bank statement, a pile of receipts, or "I spent $40 at Costco and got paid $2,050 today" into your AI and it fills everything out for you — transactions (with duplicate detection), bills, budgets, income sources (gross or net pay), accounts, categories and goals.
+
+Connect with Claude Code:
+
+```sh
+claude mcp add aurum --transport http http://your-server:5533/mcp \
+  --header "Authorization: Bearer YOUR_AURUM_PASSWORD"
+```
+
+Or in claude.ai / Claude Desktop: **Settings → Connectors → Add custom connector** with the same URL. For clients that only speak stdio, bridge with [`mcp-remote`](https://www.npmjs.com/package/mcp-remote). If `AURUM_PASSWORD` is unset the endpoint is open — only do that on a trusted network.
+
+Tools: `get_overview`, `list_transactions`, `add_transactions`, `update_transaction`, `delete_transactions`, `add_categories`, `add_accounts`, `set_budgets`, `add_bills`, `mark_bill_paid`, `add_income_sources`, `add_goals`, `sync_bank_transactions`. AI-added transactions run through the same dedup and learned auto-categorization rules as file imports.
+
 ## Server environment variables
 
 | Variable | Default | Purpose |
 |---|---|---|
 | `PORT` | `5533` | Listen port |
 | `AURUM_DB` | `./prisma/dev.db` | SQLite file path (wins over `DATABASE_URL`) |
-| `AURUM_PASSWORD` | *(unset)* | When set, the web UI requires this password |
+| `AURUM_PASSWORD` | *(unset)* | When set, the web UI requires this password (and the MCP endpoint requires it as a Bearer token) |

@@ -37,7 +37,8 @@ model Account {
 model IncomeSource {
   id          String    @id @default(cuid())
   name        String
-  amount      Float
+  amount      Float // net (take-home) per pay period — all income math uses this
+  grossAmount Float? // gross per pay period; deduction % is derived, not stored
   frequency   String    @default("monthly") // weekly | biweekly | twicemonthly | monthly | quarterly | yearly | onetime
   active      Boolean   @default(true)
   nextPayDate DateTime?

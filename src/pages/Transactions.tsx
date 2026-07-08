@@ -75,9 +75,11 @@ import {
   type CsvParseResult,
 } from '@/lib/csv';
 import { looksLikeOfx, ofxToTransactions, parseOfx, type OfxParseResult } from '@/lib/ofx';
+import { RULES_KEY, applyRulesToDrafts, parseRules } from '@/lib/rules';
 import { parseTags, type Transaction } from '@/shared/types';
 import { PAYMENT_METHODS } from '@/shared/defaults';
-import { cn, readFileAsText } from '@/lib/utils';
+import { cn } from '@/lib/utils';
+import { readFileAsText } from '@/lib/files';
 
 const PAGE_SIZE = 50;
 
@@ -845,10 +847,14 @@ function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o:
         onOpenChange(false);
         return;
       }
+      const rules = parseRules(settingRows.find((r) => r.key === RULES_KEY)?.value);
+      const auto = applyRulesToDrafts(drafts, rules, categories);
       await api.createMany('transaction', drafts);
       refreshAll();
       toast.success(
-        `Imported ${drafts.length} transactions${duplicates ? ` · ${duplicates} duplicates skipped` : ''}`
+        `Imported ${drafts.length} transactions` +
+          (duplicates ? ` · ${duplicates} duplicates skipped` : '') +
+          (auto ? ` · ${auto} auto-categorized` : '')
       );
       onOpenChange(false);
     } catch (err) {
@@ -883,12 +889,15 @@ function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o:
         );
         return;
       }
+      const rules = parseRules(settingRows.find((r) => r.key === RULES_KEY)?.value);
+      const auto = applyRulesToDrafts(drafts, rules, categories);
       await api.createMany('transaction', drafts);
       refreshAll();
       toast.success(
         `Imported ${drafts.length} transactions` +
           (duplicates ? ` · ${duplicates} duplicates skipped` : '') +
-          (skipped ? ` · ${skipped} rows unreadable` : '')
+          (skipped ? ` · ${skipped} rows unreadable` : '') +
+          (auto ? ` · ${auto} auto-categorized` : '')
       );
       onOpenChange(false);
     } catch (err) {

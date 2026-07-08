@@ -19,6 +19,12 @@ async function bootstrap() {
   // Pick the storage backend (Electron IPC → self-hosted server → browser)
   // before rendering, so every component sees a ready `api`.
   const status = await initApi();
+
+  // PWA: installable + resilient shell for web/self-hosted modes. Skipped in
+  // dev (would cache stale modules) and in Electron (no benefit).
+  if (!import.meta.env.DEV && !window.location.protocol.startsWith('file') && 'serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  }
   const root = ReactDOM.createRoot(document.getElementById('root')!);
 
   if (status.needsAuth) {

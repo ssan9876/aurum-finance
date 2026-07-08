@@ -35,7 +35,10 @@ export interface Account {
 export interface IncomeSource {
   id: string;
   name: string;
+  /** Net (take-home) per pay period — all income math uses this. */
   amount: number;
+  /** Gross per pay period; deduction % is derived from gross vs net. */
+  grossAmount?: number | null;
   frequency: Frequency;
   active: boolean;
   nextPayDate?: string | null;

@@ -5,7 +5,8 @@
 import Papa from 'papaparse';
 import { format } from 'date-fns';
 import { api } from '@/data/api';
-import { downloadFile, readFileAsText, round2 } from '@/lib/utils';
+import { downloadFile, readFileAsText } from '@/lib/files';
+import { round2 } from '@/lib/utils';
 import { parseTags, type Account, type BackupPayload, type Category, type Transaction } from '@/shared/types';
 
 export interface TxExportRow {

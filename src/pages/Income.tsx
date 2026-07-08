@@ -120,7 +120,8 @@ export default function Income() {
                   <div className="min-w-0">
                     <CardTitle className="text-[15px] truncate">{s.name}</CardTitle>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {fmtMoney(s.amount)} · {freqLabel(s.frequency)}
+                      {fmtMoney(s.amount)}
+                      {s.grossAmount ? ' net' : ''} · {freqLabel(s.frequency)}
                     </p>
                   </div>
                 </div>
@@ -159,6 +160,20 @@ export default function Income() {
                     <p className="text-[11px] text-muted-foreground">Yearly</p>
                     <p className="font-semibold tabular-nums">{fmtMoney(toYearly(s.amount, s.frequency))}</p>
                   </div>
+                  {s.grossAmount ? (
+                    <>
+                      <div>
+                        <p className="text-[11px] text-muted-foreground">Gross / paycheck</p>
+                        <p className="font-semibold tabular-nums">{fmtMoney(s.grossAmount)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] text-muted-foreground">Deductions</p>
+                        <p className="font-semibold tabular-nums">
+                          −{Math.round((1 - s.amount / s.grossAmount) * 100)}%
+                        </p>
+                      </div>
+                    </>
+                  ) : null}
                 </div>
                 <div className="flex items-center justify-between mt-3">
                   <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">

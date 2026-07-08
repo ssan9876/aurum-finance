@@ -27,17 +27,20 @@ import {
 } from '@/components/ui/select';
 import { DateField, Field, MoneyInput, TagInput } from '@/components/shared';
 import { EntityIcon } from '@/lib/icons';
-import { cn, readFileAsDataUrl } from '@/lib/utils';
+import { cn } from '@/lib/utils';
+import { readFileAsDataUrl } from '@/lib/files';
 import { PAYMENT_METHODS } from '@/shared/defaults';
 import { parseTags, serializeTags, type Transaction, type TransactionType } from '@/shared/types';
 import {
   useAccounts,
   useCategories,
   useCreateEntity,
+  useSettingRows,
   useTags,
   useUpdateEntity,
 } from '@/data/hooks';
 import { api } from '@/data/api';
+import { RULES_KEY, learnRule, matchRule, parseRules } from '@/lib/rules';
 
 const baseSchema = z.object({
   date: z.string().min(1, 'Date is required'),
@@ -82,6 +85,7 @@ export function TransactionDialog({
   const { data: categories = [] } = useCategories();
   const { data: accounts = [] } = useAccounts();
   const { data: tagRows = [] } = useTags();
+  const { data: settingRows = [] } = useSettingRows();
   const createTx = useCreateEntity('transaction');
   const updateTx = useUpdateEntity('transaction');
 
@@ -120,6 +124,23 @@ export function TransactionDialog({
   const catType = draft.type === 'income' ? 'income' : 'expense';
   const topCategories = categories.filter((c) => !c.parentId && c.type === catType);
   const subcategories = categories.filter((c) => c.parentId === draft.categoryId);
+
+  // Suggest a category from learned merchant rules while the user types.
+  React.useEffect(() => {
+    if (!open || isEdit || draft.type === 'transfer' || draft.categoryId || !draft.merchant.trim()) return;
+    const timer = setTimeout(() => {
+      const rules = parseRules(settingRows.find((r) => r.key === RULES_KEY)?.value);
+      const rule = matchRule(rules, draft.merchant, categories);
+      const cat = rule ? categories.find((c) => c.id === rule.categoryId) : undefined;
+      if (!rule || !cat || cat.type !== catType) return;
+      setDraft((d) =>
+        d.categoryId || d.merchant !== draft.merchant
+          ? d
+          : { ...d, categoryId: rule.categoryId, subcategoryId: rule.subcategoryId ?? '' }
+      );
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [open, isEdit, draft.type, draft.categoryId, draft.merchant, settingRows, categories, catType]);
 
   async function handleSave() {
     const next: Record<string, string> = {};
@@ -169,6 +190,12 @@ export function TransactionDialog({
       const known = new Set(tagRows.map((t) => t.name));
       for (const t of draft.tags.filter((t) => !known.has(t))) {
         api.create('tag', { name: t }).catch(() => {});
+      }
+      // Learn merchant → category so imports and quick-add autofill next time.
+      if (payload.type !== 'transfer' && payload.categoryId && payload.merchant) {
+        const rules = parseRules(settingRows.find((r) => r.key === RULES_KEY)?.value);
+        const next = learnRule(rules, payload.merchant, payload.categoryId, payload.subcategoryId ?? null);
+        if (next !== rules) api.setSetting(RULES_KEY, JSON.stringify(next)).catch(() => {});
       }
       onOpenChange(false);
     } catch {

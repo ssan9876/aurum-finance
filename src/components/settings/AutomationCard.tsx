@@ -8,8 +8,14 @@ import { Zap } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useRefreshAll, useSettingRows } from '@/data/hooks';
 import { api } from '@/data/api';
+
+const SYNC_HOUR_KEY = 'automation.syncHour';
+const DEFAULT_SYNC_HOUR = 23;
+
+const hourLabel = (h: number) => `${((h + 11) % 12) + 1} ${h < 12 ? 'AM' : 'PM'}`;
 
 const TOGGLES = [
   {
@@ -39,8 +45,8 @@ const TOGGLES = [
   {
     key: 'automation.bankSync',
     default: true,
-    label: 'Daily bank sync',
-    desc: 'Pull new bank transactions once a day (when SimpleFIN is connected)',
+    label: 'Nightly bank sync',
+    desc: 'Pull new bank transactions every night (when SimpleFIN is connected)',
   },
 ] as const;
 
@@ -60,6 +66,21 @@ export function AutomationCard() {
 
   async function toggle(key: string, value: boolean) {
     await api.setSetting(key, JSON.stringify(value));
+    refreshAll();
+  }
+
+  const syncHour = (() => {
+    const row = settingRows.find((r) => r.key === SYNC_HOUR_KEY);
+    try {
+      const v = row ? JSON.parse(row.value) : DEFAULT_SYNC_HOUR;
+      return Number.isInteger(v) && v >= 0 && v <= 23 ? v : DEFAULT_SYNC_HOUR;
+    } catch {
+      return DEFAULT_SYNC_HOUR;
+    }
+  })();
+
+  async function setSyncHour(v: string) {
+    await api.setSetting(SYNC_HOUR_KEY, v);
     refreshAll();
   }
 
@@ -88,6 +109,23 @@ export function AutomationCard() {
                 aria-label={row.label}
               />
             </div>
+            {row.key === 'automation.bankSync' && enabled(row.key, row.default) && (
+              <div className="flex items-center justify-between gap-4 pl-4">
+                <p className="text-xs text-muted-foreground">Sync at</p>
+                <Select value={String(syncHour)} onValueChange={setSyncHour}>
+                  <SelectTrigger className="w-[110px] h-8" aria-label="Nightly sync hour">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 24 }, (_, h) => (
+                      <SelectItem key={h} value={String(h)}>
+                        {hourLabel(h)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </React.Fragment>
         ))}
       </CardContent>

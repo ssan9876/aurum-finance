@@ -19,7 +19,14 @@
  *    running balance lands exactly on the bank's reported balance)
  */
 import type { DataService } from './data-service';
-import { RULES_KEY, matchRule, parseRules } from '../src/lib/rules';
+import { RULES_KEY, applyRulesToDrafts, parseRules } from '../src/lib/rules';
+import { applyKeywordsToDrafts } from '../src/lib/keywords';
+import {
+  detectTransferPairs,
+  mergedTransferFields,
+  splitExternalIds,
+} from '../src/lib/transfers';
+import { SAVINGS_CATEGORY, applySavingsCategory } from '../src/lib/savings-category';
 import type { Account, Category, Setting, Transaction } from '../src/shared/types';
 
 const ACCESS_KEY = 'simplefin.accessUrl';
@@ -28,6 +35,8 @@ const LAST_SYNC_KEY = 'simplefin.lastSync';
 
 const DAY = 24 * 60 * 60 * 1000;
 const FIRST_SYNC_DAYS = 90;
+/** A "full" re-sync reaches back this far to backfill history in one pass. */
+const FULL_SYNC_DAYS = 730;
 const RESYNC_OVERLAP_DAYS = 7;
 
 interface SfinTransaction {
@@ -154,14 +163,15 @@ function cleanName(name: string): string {
   return trimmed;
 }
 
-export async function simplefinSync(service: DataService) {
+export async function simplefinSync(service: DataService, opts: { full?: boolean } = {}) {
   const accessUrl = await getSetting(service, ACCESS_KEY);
   if (!accessUrl) throw new Error('SimpleFIN is not connected.');
 
   const lastSync = await getSetting(service, LAST_SYNC_KEY);
-  const startDate = lastSync
-    ? new Date(new Date(lastSync).getTime() - RESYNC_OVERLAP_DAYS * DAY)
-    : new Date(Date.now() - FIRST_SYNC_DAYS * DAY);
+  const startDate =
+    !opts.full && lastSync
+      ? new Date(new Date(lastSync).getTime() - RESYNC_OVERLAP_DAYS * DAY)
+      : new Date(Date.now() - (opts.full ? FULL_SYNC_DAYS : FIRST_SYNC_DAYS) * DAY);
 
   const data = await fetchAccounts(accessUrl, startDate);
   const errors = data.errors ?? [];
@@ -182,22 +192,37 @@ export async function simplefinSync(service: DataService) {
     /* rebuild below */
   }
 
-  const knownExternal = new Set(transactions.map((t) => t.externalId).filter(Boolean) as string[]);
+  const createCategory = (d: Partial<Category>) =>
+    service.handle('create', { entity: 'category', data: d }) as Promise<Category>;
+
+  // A stored transfer keeps BOTH sides' bank ids joined with "+"; split them so
+  // re-syncing either leg dedupes against the merged row.
+  const knownExternal = new Set(transactions.flatMap((t) => splitExternalIds(t.externalId)));
   const fingerprint = (date: string, amount: number, merchant: string) =>
     `${date.slice(0, 10)}|${round2(Math.abs(amount)).toFixed(2)}|${merchant.trim().toLowerCase()}`;
   const knownRows = new Set(transactions.map((t) => fingerprint(t.date, t.amount, t.merchant)));
 
-  const summary: { account: string; aurumAccount: string; newTransactions: number }[] = [];
-  let created = 0;
-  let duplicates = 0;
-  let autoCategorized = 0;
+  // Account ids already bound to a SimpleFIN account — never let a fresh
+  // SimpleFIN account name-match onto one another id already owns, which is
+  // what collapsed multiple banks into a single Aurum account before.
+  const boundAurumIds = new Set(Object.values(accountMap));
   let mapChanged = false;
 
+  interface SyncDraft extends Partial<Transaction> {
+    accountId: string;
+  }
+  const drafts: SyncDraft[] = [];
+  const perAccount = new Map<string, { sfinName: string; aurumName: string; count: number }>();
+  let duplicates = 0;
+
+  // Phase 1 — resolve each SimpleFIN account to an Aurum account (by stored
+  // mapping, then unclaimed name match, else auto-create) and stage its rows.
   for (const sfin of sfinAccounts) {
-    // Resolve (or create) the matching Aurum account.
     let account = accountMap[sfin.id] ? accounts.find((a) => a.id === accountMap[sfin.id]) : undefined;
     if (!account) {
-      account = accounts.find((a) => a.name.trim().toLowerCase() === sfin.name.trim().toLowerCase());
+      account = accounts.find(
+        (a) => !boundAurumIds.has(a.id) && a.name.trim().toLowerCase() === sfin.name.trim().toLowerCase()
+      );
     }
     const rows = (sfin.transactions ?? []).filter((t) => !t.pending);
     if (!account) {
@@ -206,7 +231,7 @@ export async function simplefinSync(service: DataService) {
       account = (await service.handle('create', {
         entity: 'account',
         data: {
-          name: sfin.name,
+          name: cleanName(sfin.name),
           type: guessAccountType(sfin.name),
           startBalance: round2(Number(sfin.balance) - net),
         },
@@ -217,8 +242,9 @@ export async function simplefinSync(service: DataService) {
       accountMap[sfin.id] = account.id;
       mapChanged = true;
     }
+    boundAurumIds.add(account.id);
+    perAccount.set(sfin.id, { sfinName: sfin.name, aurumName: account.name, count: 0 });
 
-    const drafts: Partial<Transaction>[] = [];
     for (const t of rows) {
       const externalId = `sfin:${t.id}`;
       const amount = Number(t.amount);
@@ -229,35 +255,64 @@ export async function simplefinSync(service: DataService) {
         duplicates++;
         continue;
       }
-      const type = amount < 0 ? 'expense' : 'income';
-      let categoryId: string | null = null;
-      let subcategoryId: string | null = null;
-      const rule = matchRule(rules, merchant, categories);
-      const ruleCat = rule ? categories.find((c) => c.id === rule.categoryId) : undefined;
-      if (rule && ruleCat?.type === type) {
-        categoryId = rule.categoryId;
-        subcategoryId = rule.subcategoryId;
-        autoCategorized++;
-      }
+      knownExternal.add(externalId);
+      knownRows.add(fingerprint(date, amount, merchant));
       drafts.push({
         date,
         amount: round2(Math.abs(amount)),
-        type,
+        type: amount < 0 ? 'expense' : 'income',
         merchant,
         description: t.memo && t.memo !== t.description ? t.memo : t.description || null,
-        categoryId,
-        subcategoryId,
+        categoryId: null,
+        subcategoryId: null,
         accountId: account.id,
         externalId,
       });
-      knownExternal.add(externalId);
-      knownRows.add(fingerprint(date, amount, merchant));
     }
-    if (drafts.length) {
-      await service.handle('createMany', { entity: 'transaction', rows: drafts });
-      created += drafts.length;
-    }
-    summary.push({ account: sfin.name, aurumAccount: account.name, newTransactions: drafts.length });
+  }
+
+  // Phase 2 — collapse expense/income pairs that are really one move between
+  // two synced accounts into a single transfer (fixes the "duplicate when I
+  // move money around" problem). Both bank ids ride along on the kept row.
+  const pairs = detectTransferPairs(
+    drafts.map((d) => ({
+      date: d.date!,
+      amount: d.amount!,
+      type: d.type!,
+      merchant: d.merchant!,
+      description: d.description,
+      accountId: d.accountId,
+      externalId: d.externalId,
+      _ref: d,
+    }))
+  );
+  const dropped = new Set<SyncDraft>();
+  let transfersMerged = 0;
+  for (const pair of pairs) {
+    const outRef = (pair.out as unknown as { _ref: SyncDraft })._ref;
+    const inRef = (pair.in as unknown as { _ref: SyncDraft })._ref;
+    Object.assign(outRef, mergedTransferFields(pair));
+    dropped.add(inRef);
+    transfersMerged++;
+  }
+  const finalDrafts = drafts.filter((d) => !dropped.has(d));
+
+  // Phase 3 — categorize the non-transfer rows: learned rules first, then the
+  // built-in keyword library, then the Savings category for savings accounts.
+  const autoCategorized =
+    applyRulesToDrafts(finalDrafts, rules, categories) +
+    (await applyKeywordsToDrafts(finalDrafts, categories, createCategory)) +
+    (await applySavingsCategory(finalDrafts, accounts, categories, createCategory));
+
+  // Phase 4 — persist, tallying per-account so the summary still reports counts.
+  const countByAccount = new Map<string, number>();
+  for (const d of finalDrafts) countByAccount.set(d.accountId, (countByAccount.get(d.accountId) ?? 0) + 1);
+  for (const [sfinId, entry] of perAccount) {
+    const aurumId = accountMap[sfinId];
+    entry.count = aurumId ? countByAccount.get(aurumId) ?? 0 : 0;
+  }
+  if (finalDrafts.length) {
+    await service.handle('createMany', { entity: 'transaction', rows: finalDrafts });
   }
 
   if (mapChanged) await setSetting(service, MAP_KEY, JSON.stringify(accountMap));
@@ -266,10 +321,15 @@ export async function simplefinSync(service: DataService) {
 
   return {
     syncedAt,
-    created,
+    created: finalDrafts.length,
     duplicatesSkipped: duplicates,
     autoCategorized,
-    accounts: summary,
+    transfersMerged,
+    accounts: [...perAccount.values()].map((e) => ({
+      account: e.sfinName,
+      aurumAccount: e.aurumName,
+      newTransactions: e.count,
+    })),
     errors: errors.length ? errors : undefined,
   };
 }

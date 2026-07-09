@@ -275,6 +275,13 @@ export const monthlyBillTotal = (bills: Bill[]) =>
 
 export const totalSavings = (savings: SavingsAccount[]) => round2(sum(savings.map((s) => s.balance)));
 
+/** Live balance of every non-archived savings-type bank account. */
+export function savingsAccountsBalance(accounts: Account[], txs: Transaction[]): number {
+  return round2(
+    sum(accounts.filter((a) => !a.archived && a.type === 'savings').map((a) => accountBalance(a, txs)))
+  );
+}
+
 /** Months until the goal is reached with contributions + monthly compounding. */
 export function monthsToGoal(s: SavingsAccount): number | null {
   if (!s.goal || s.goal <= 0 || s.balance >= s.goal) return s.goal ? 0 : null;

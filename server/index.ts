@@ -22,7 +22,7 @@ import { startScheduler } from './scheduler';
 
 const PORT = Number(process.env.PORT ?? 5533);
 const PASSWORD = process.env.AURUM_PASSWORD ?? '';
-const APP_VERSION = '1.3.0';
+const APP_VERSION = '1.4.0';
 
 // AURUM_DB wins over DATABASE_URL: Prisma's client auto-loads a project .env
 // at import time, which would otherwise silently override the service config.
@@ -98,7 +98,7 @@ const sfin = (fn: (service: DataService, body: any) => Promise<unknown>) =>
   };
 app.get('/api/simplefin/status', requireKey, sfin(() => simplefinStatus(service)));
 app.post('/api/simplefin/connect', requireKey, sfin((s, body) => simplefinConnect(s, String(body.token ?? ''))));
-app.post('/api/simplefin/sync', requireKey, sfin(() => simplefinSync(service)));
+app.post('/api/simplefin/sync', requireKey, sfin((s, body) => simplefinSync(s, { full: !!body.full })));
 app.post('/api/simplefin/disconnect', requireKey, sfin(() => simplefinDisconnect(service)));
 
 // MCP endpoint for AI assistants (Claude Desktop/Code, claude.ai connectors).

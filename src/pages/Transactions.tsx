@@ -50,7 +50,7 @@ import {
 } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Amount, CategoryChip, DateField, EmptyState, Field, PageHeader, SearchInput } from '@/components/shared';
+import { Amount, CategoryChip, ConfirmDialog, DateField, EmptyState, Field, PageHeader, SearchInput } from '@/components/shared';
 import { TransactionDialog } from '@/components/forms/TransactionDialog';
 import { useSettings } from '@/state/settings';
 import {
@@ -76,7 +76,10 @@ import {
 } from '@/lib/csv';
 import { looksLikeOfx, ofxToTransactions, parseOfx, type OfxParseResult } from '@/lib/ofx';
 import { RULES_KEY, applyRulesToDrafts, parseRules } from '@/lib/rules';
-import { parseTags, type Transaction } from '@/shared/types';
+import { applyKeywordsToDrafts } from '@/lib/keywords';
+import { applySavingsCategory } from '@/lib/savings-category';
+import { detectTransferPairs, mergedTransferFields, type TransferPair } from '@/lib/transfers';
+import { parseTags, serializeTags, type Account, type Category, type Setting, type Transaction } from '@/shared/types';
 import { PAYMENT_METHODS } from '@/shared/defaults';
 import { cn } from '@/lib/utils';
 import { readFileAsText } from '@/lib/files';
@@ -84,6 +87,29 @@ import { readFileAsText } from '@/lib/files';
 const PAGE_SIZE = 50;
 
 type SortKey = 'date' | 'amount' | 'merchant';
+
+/** Reserved tag marking a transaction as a bill payment (no schema change). */
+export const PAID_BILL_TAG = 'Paid Bill';
+
+/**
+ * Fill categories on import drafts: learned merchant rules first, then the
+ * built-in keyword library, then the Savings category for savings accounts.
+ * New categories the keyword/savings layers need are created on the fly.
+ * Returns how many rows were categorized.
+ */
+async function autoCategorize(
+  drafts: Partial<Transaction>[],
+  categories: Category[],
+  accounts: Account[],
+  settingRows: Setting[]
+): Promise<number> {
+  const rules = parseRules(settingRows.find((r) => r.key === RULES_KEY)?.value);
+  const createCategory = (d: Partial<Category>) => api.create('category', d);
+  let n = applyRulesToDrafts(drafts, rules, categories);
+  n += await applyKeywordsToDrafts(drafts, categories, createCategory);
+  n += await applySavingsCategory(drafts, accounts, categories, createCategory);
+  return n;
+}
 
 export default function Transactions() {
   const [params, setParams] = useSearchParams();
@@ -98,6 +124,9 @@ export default function Transactions() {
   const bulkUpdate = useBulkUpdate('transaction');
   const createTx = useCreateEntity('transaction');
   const deleteWithUndo = useDeleteWithUndo('transaction');
+  const refreshAll = useRefreshAll();
+  const [transferPairs, setTransferPairs] = React.useState<TransferPair<Transaction>[] | null>(null);
+  const [mergingTransfers, setMergingTransfers] = React.useState(false);
 
   /* --------------------------------- state -------------------------------- */
   const q = params.get('q') ?? '';
@@ -111,7 +140,8 @@ export default function Transactions() {
 
   const [type, setType] = React.useState('all');
   const [categoryId, setCategoryId] = React.useState('all');
-  const [accountId, setAccountId] = React.useState('all');
+  // Seed from ?account=<id> so sidebar savings links and deep links land filtered.
+  const [accountId, setAccountId] = React.useState(() => params.get('account') ?? 'all');
   const [method, setMethod] = React.useState('all');
   const [tag, setTag] = React.useState('all');
   const [from, setFrom] = React.useState<string | null>(null);
@@ -124,6 +154,13 @@ export default function Transactions() {
   const [importOpen, setImportOpen] = React.useState(false);
 
   React.useEffect(() => setPage(0), [q, type, categoryId, accountId, method, tag, from, to]);
+
+  // Follow ?account= changes (e.g. clicking another savings account in the sidebar
+  // while already on this page).
+  const accountParam = params.get('account');
+  React.useEffect(() => {
+    if (accountParam) setAccountId(accountParam);
+  }, [accountParam]);
 
   const catById = React.useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
   const accById = React.useMemo(() => new Map(accounts.map((a) => [a.id, a])), [accounts]);
@@ -209,6 +246,46 @@ export default function Transactions() {
     setSelected(new Set());
   }
 
+  async function togglePaidBill(t: Transaction) {
+    const tags = parseTags(t.tags);
+    const flagged = tags.includes(PAID_BILL_TAG);
+    const next = flagged ? tags.filter((x) => x !== PAID_BILL_TAG) : [...tags, PAID_BILL_TAG];
+    await updateTx.mutateAsync({ id: t.id, data: { tags: serializeTags(next) } });
+    toast.success(flagged ? 'Removed paid-bill flag' : 'Flagged as paid bill');
+  }
+
+  /** Find existing expense/income pairs that are really one account move. */
+  function scanTransfers() {
+    if (!transactions) return;
+    const pairs = detectTransferPairs(transactions);
+    if (pairs.length === 0) {
+      toast.info('No duplicate transfers found.', {
+        description: 'Looked for matching opposite amounts between two accounts within a few days.',
+      });
+      return;
+    }
+    setTransferPairs(pairs);
+  }
+
+  /** Merge each pair into one transfer row and drop the duplicate side. */
+  async function applyTransfers() {
+    if (!transferPairs) return;
+    setMergingTransfers(true);
+    try {
+      for (const pair of transferPairs) {
+        await api.update('transaction', pair.out.id!, mergedTransferFields(pair));
+      }
+      await api.removeMany('transaction', transferPairs.map((p) => p.in.id!));
+      refreshAll();
+      toast.success(`Merged ${transferPairs.length} transfer${transferPairs.length > 1 ? 's' : ''}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not merge transfers');
+    } finally {
+      setMergingTransfers(false);
+      setTransferPairs(null);
+    }
+  }
+
   const clearFilters = () => {
     setType('all');
     setCategoryId('all');
@@ -255,6 +332,9 @@ export default function Transactions() {
             </DropdownMenu>
             <Button variant="outline" onClick={() => setImportOpen(true)}>
               <FileUp /> Import
+            </Button>
+            <Button variant="outline" onClick={scanTransfers}>
+              <ArrowRightLeft /> Detect transfers
             </Button>
             <Button
               onClick={() => {
@@ -499,6 +579,9 @@ export default function Transactions() {
                           {t.type === 'transfer' && <ArrowRightLeft className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
                           <span className="truncate font-medium">{t.merchant || '—'}</span>
                           {t.recurring && <Repeat className="h-3 w-3 text-muted-foreground shrink-0" aria-label="Recurring" />}
+                          {parseTags(t.tags).includes(PAID_BILL_TAG) && (
+                            <Receipt className="h-3 w-3 text-primary shrink-0" aria-label="Paid bill" />
+                          )}
                           {t.receiptImage && <Paperclip className="h-3 w-3 text-muted-foreground shrink-0" aria-label="Has receipt" />}
                         </span>
                         {t.description && (
@@ -562,6 +645,10 @@ export default function Transactions() {
                           <DropdownMenuItem onClick={() => handleDuplicate(t)}>
                             <Copy /> Duplicate
                           </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => togglePaidBill(t)}>
+                            <Receipt />{' '}
+                            {parseTags(t.tags).includes(PAID_BILL_TAG) ? 'Remove paid-bill flag' : 'Flag as paid bill'}
+                          </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem className="text-destructive" onClick={() => deleteWithUndo([t], 'Transaction deleted')}>
                             <Trash2 /> Delete
@@ -601,6 +688,24 @@ export default function Transactions() {
 
       <TransactionDialog open={dialogOpen} onOpenChange={setDialogOpen} transaction={editing} />
       <ImportDialog open={importOpen} onOpenChange={setImportOpen} />
+      <ConfirmDialog
+        open={transferPairs !== null}
+        onOpenChange={(o) => !o && !mergingTransfers && setTransferPairs(null)}
+        title={`Merge ${transferPairs?.length ?? 0} transfer${transferPairs?.length === 1 ? '' : 's'}?`}
+        description={
+          `Found ${transferPairs?.length ?? 0} pair${transferPairs?.length === 1 ? '' : 's'} of matching opposite ` +
+          `amounts between two accounts (e.g. ${
+            transferPairs?.[0]
+              ? `${accById.get(transferPairs[0].out.accountId ?? '')?.name ?? 'one account'} → ${
+                  accById.get(transferPairs[0].in.accountId ?? '')?.name ?? 'another'
+                } for ${fmtMoney(transferPairs[0].out.amount)}`
+              : ''
+          }). Each pair becomes a single transfer and the duplicate row is removed.`
+        }
+        confirmLabel="Merge transfers"
+        destructive={false}
+        onConfirm={applyTransfers}
+      />
     </div>
   );
 }
@@ -847,8 +952,7 @@ function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o:
         onOpenChange(false);
         return;
       }
-      const rules = parseRules(settingRows.find((r) => r.key === RULES_KEY)?.value);
-      const auto = applyRulesToDrafts(drafts, rules, categories);
+      const auto = await autoCategorize(drafts, categories, accounts, settingRows);
       await api.createMany('transaction', drafts);
       refreshAll();
       toast.success(
@@ -889,8 +993,7 @@ function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o:
         );
         return;
       }
-      const rules = parseRules(settingRows.find((r) => r.key === RULES_KEY)?.value);
-      const auto = applyRulesToDrafts(drafts, rules, categories);
+      const auto = await autoCategorize(drafts, categories, accounts, settingRows);
       await api.createMany('transaction', drafts);
       refreshAll();
       toast.success(

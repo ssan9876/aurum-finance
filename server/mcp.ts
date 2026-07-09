@@ -30,6 +30,8 @@ import {
   totalMonthlyIncome,
 } from '../src/lib/finance';
 import { RULES_KEY, matchRule, parseRules } from '../src/lib/rules';
+import { guessCategory } from '../src/lib/keywords';
+import { SAVINGS_CATEGORY } from '../src/lib/savings-category';
 import { simplefinConfigured, simplefinSync } from './simplefin';
 import {
   parseTags,
@@ -374,10 +376,33 @@ export function buildMcpServer(service: DataService): McpServer {
             autoCategorized++;
           }
         }
+        // Still uncategorized → try the built-in keyword library, resolving to
+        // an existing category only (the AI path doesn't invent categories).
+        if (!cat && type !== 'transfer') {
+          const guess = guessCategory(row.merchant, type === 'income' ? 'income' : 'expense');
+          if (guess) {
+            const resolved = resolveCategory(
+              categories,
+              guess.subcategory ? `${guess.category} > ${guess.subcategory}` : guess.category
+            );
+            if (resolved) {
+              cat = resolved;
+              autoCategorized++;
+            }
+          }
+        }
         const acc = row.account ? byRef(accounts, row.account) : undefined;
         if (row.account && !acc) unknownAccounts.add(row.account);
         const toAcc = row.toAccount ? byRef(accounts, row.toAccount) : undefined;
         if (row.toAccount && !toAcc) unknownAccounts.add(row.toAccount);
+        // Money spent from a savings account → categorize as Savings.
+        if (!cat && type === 'expense' && acc?.type === 'savings') {
+          const resolved = resolveCategory(categories, SAVINGS_CATEGORY);
+          if (resolved) {
+            cat = resolved;
+            autoCategorized++;
+          }
+        }
 
         const tx = await create('transaction', {
           date: iso,

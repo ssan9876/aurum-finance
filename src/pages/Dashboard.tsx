@@ -53,6 +53,7 @@ import {
   healthScore,
   monthlySeries,
   predictMonthSpend,
+  savingsAccountsBalance,
   savingsHistorySeries,
   savingsStreak,
   spendByCategory,
@@ -89,7 +90,8 @@ export default function Dashboard() {
     const monthExpense = thisMonth?.expense ?? 0;
     const plannedMonthlyIncome = totalMonthlyIncome(incomeSources);
     const monthlyIncome = Math.max(plannedMonthlyIncome, monthIncomeActual);
-    const savingsTotal = totalSavings(savings);
+    const savingsAccountsTotal = savingsAccountsBalance(accounts, transactions);
+    const savingsTotal = totalSavings(savings) + savingsAccountsTotal;
     const statuses = budgetStatuses(budgets, categories, transactions, now);
     const prediction = predictMonthSpend(transactions, now);
     const rate = monthlyIncome > 0 ? ((monthlyIncome - monthExpense) / monthlyIncome) * 100 : 0;
@@ -108,8 +110,15 @@ export default function Dashboard() {
       monthExpense,
       monthIncomeActual,
       plannedMonthlyIncome,
-      accountTotal: totalAccountBalance(accounts, transactions),
+      // Savings-type accounts live in the Total Savings card, so keep them out
+      // of the Account Balance total to avoid double-counting.
+      accountTotal: totalAccountBalance(
+        accounts.filter((a) => a.type !== 'savings'),
+        transactions
+      ),
+      spendingAccountCount: accounts.filter((a) => !a.archived && a.type !== 'savings').length,
       savingsTotal,
+      savingsAccountsTotal,
       yearlySalary: totalYearlyIncome(incomeSources),
       rate,
       statuses,
@@ -186,7 +195,7 @@ export default function Dashboard() {
           label="Account Balance"
           value={fmtMoney(d.accountTotal, { compact: true })}
           icon={<Wallet />}
-          sub={`${accounts!.filter((a) => !a.archived).length} accounts`}
+          sub={`${d.spendingAccountCount} accounts · excludes savings`}
         />
         <StatCard
           label="Total Savings"
@@ -197,6 +206,8 @@ export default function Dashboard() {
               <span className="inline-flex items-center gap-1 text-warning">
                 <Flame className="h-3 w-3" /> {d.streak}-month savings streak
               </span>
+            ) : d.savingsAccountsTotal > 0 ? (
+              `Incl. ${fmtMoney(d.savingsAccountsTotal, { compact: true })} in savings accounts`
             ) : (
               'Across all savings accounts'
             )

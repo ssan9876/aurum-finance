@@ -5,7 +5,7 @@
  */
 import * as React from 'react';
 import { toast } from 'sonner';
-import { Landmark, Link2, RefreshCcw, Unlink } from 'lucide-react';
+import { History, Landmark, Link2, RefreshCcw, Unlink } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -60,15 +60,23 @@ export function BankSyncCard() {
     }
   }
 
-  async function handleSync() {
+  async function handleSync(full = false) {
     setBusy(true);
     try {
-      const res = await call<{ created: number; duplicatesSkipped: number; autoCategorized: number; syncedAt: string }>('sync', {});
+      const res = await call<{
+        created: number;
+        duplicatesSkipped: number;
+        autoCategorized: number;
+        transfersMerged?: number;
+        syncedAt: string;
+      }>('sync', { full });
       setStatus({ connected: true, lastSync: res.syncedAt });
       refreshAll();
       toast.success(
         res.created
-          ? `Imported ${res.created} new transactions${res.autoCategorized ? ` · ${res.autoCategorized} auto-categorized` : ''}`
+          ? `Imported ${res.created} new transactions` +
+              (res.autoCategorized ? ` · ${res.autoCategorized} auto-categorized` : '') +
+              (res.transfersMerged ? ` · ${res.transfersMerged} transfers merged` : '')
           : 'Already up to date — no new transactions.'
       );
     } catch (err) {
@@ -132,8 +140,11 @@ export function BankSyncCard() {
           </>
         ) : (
           <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={handleSync} loading={busy}>
+            <Button onClick={() => handleSync(false)} loading={busy}>
               <RefreshCcw /> Sync now
+            </Button>
+            <Button variant="outline" onClick={() => handleSync(true)} disabled={busy}>
+              <History /> Full re-sync
             </Button>
             <Button variant="outline" onClick={handleDisconnect} disabled={busy}>
               <Unlink /> Disconnect
@@ -142,6 +153,7 @@ export function BankSyncCard() {
               {status.lastSync
                 ? `Last synced ${fmtDate(status.lastSync)} · also runs automatically once a day.`
                 : 'Never synced — click Sync now to pull the last 90 days.'}
+              {' '}Full re-sync reaches back ~2 years to backfill history (duplicates are skipped).
             </p>
           </div>
         )}

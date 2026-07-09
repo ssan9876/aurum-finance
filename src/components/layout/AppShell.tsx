@@ -4,7 +4,7 @@
  * onboarding), keyboard shortcuts and reminder toasts.
  */
 import * as React from 'react';
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Toaster, toast } from 'sonner';
 import {
   ArrowRightLeft,
@@ -45,7 +45,7 @@ import { IncomeDialog } from '@/components/forms/IncomeDialog';
 import { CommandPalette } from '@/components/layout/CommandPalette';
 import { ShortcutsDialog } from '@/components/layout/ShortcutsDialog';
 import { Onboarding } from '@/components/layout/Onboarding';
-import { useBills, useBudgets, useCategories, useTransactions } from '@/data/hooks';
+import { useAccounts, useBills, useBudgets, useCategories, useTransactions } from '@/data/hooks';
 import { billState, budgetStatuses } from '@/lib/finance';
 
 interface NavItem {
@@ -90,6 +90,13 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
 ];
 
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
+  const { data: accounts = [] } = useAccounts();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const savingsAccounts = accounts.filter((a) => a.type === 'savings' && !a.archived);
+  const activeAccount =
+    location.pathname === '/transactions' ? searchParams.get('account') : null;
+
   return (
     <nav className="flex-1 overflow-y-auto px-3 pb-4 space-y-5">
       {NAV_GROUPS.map((group) => (
@@ -99,23 +106,45 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
           </p>
           <div className="space-y-0.5">
             {group.items.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.to === '/'}
-                onClick={onNavigate}
-                className={({ isActive }) =>
-                  cn(
-                    'flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm font-medium transition-colors [&_svg]:h-4 [&_svg]:w-4 [&_svg]:shrink-0',
-                    isActive
-                      ? 'bg-primary/10 text-primary'
-                      : 'text-muted-foreground hover:bg-accent hover:text-foreground'
-                  )
-                }
-              >
-                {item.icon}
-                {item.label}
-              </NavLink>
+              <React.Fragment key={item.to}>
+                <NavLink
+                  to={item.to}
+                  end={item.to === '/'}
+                  onClick={onNavigate}
+                  className={({ isActive }) =>
+                    cn(
+                      'flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm font-medium transition-colors [&_svg]:h-4 [&_svg]:w-4 [&_svg]:shrink-0',
+                      isActive
+                        ? 'bg-primary/10 text-primary'
+                        : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                    )
+                  }
+                >
+                  {item.icon}
+                  {item.label}
+                </NavLink>
+                {/* Savings-type accounts nest under the Savings entry, each
+                    linking to its filtered ledger. */}
+                {item.to === '/savings' && savingsAccounts.length > 0 && (
+                  <div className="ml-[1.4rem] mt-0.5 space-y-0.5 border-l pl-2">
+                    {savingsAccounts.map((a) => (
+                      <NavLink
+                        key={a.id}
+                        to={`/transactions?account=${a.id}`}
+                        onClick={onNavigate}
+                        className={cn(
+                          'block truncate rounded-md px-2 py-1 text-xs font-medium transition-colors',
+                          activeAccount === a.id
+                            ? 'bg-primary/10 text-primary'
+                            : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                        )}
+                      >
+                        {a.name}
+                      </NavLink>
+                    ))}
+                  </div>
+                )}
+              </React.Fragment>
             ))}
           </div>
         </div>

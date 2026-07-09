@@ -6,7 +6,7 @@
  * to implement `DataApi`.
  */
 
-export type AccountType = 'checking' | 'savings' | 'credit' | 'cash' | 'investment';
+export type AccountType = 'checking' | 'savings' | 'credit' | 'cash' | 'investment' | 'loan';
 export type Frequency =
   | 'weekly'
   | 'biweekly'

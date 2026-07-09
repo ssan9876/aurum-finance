@@ -68,8 +68,12 @@ export default function Accounts() {
   const balances = new Map(accounts.map((a) => [a.id, accountBalance(a, transactions)]));
   const active = accounts.filter((a) => !a.archived);
   const archived = accounts.filter((a) => a.archived);
-  const assets = round2(sum(active.filter((a) => a.type !== 'credit').map((a) => balances.get(a.id) ?? 0)));
-  const debt = round2(sum(active.filter((a) => a.type === 'credit').map((a) => Math.min(0, balances.get(a.id) ?? 0))));
+  const assets = round2(
+    sum(active.filter((a) => a.type !== 'credit' && a.type !== 'loan').map((a) => balances.get(a.id) ?? 0))
+  );
+  const debt = round2(
+    sum(active.filter((a) => a.type === 'credit' || a.type === 'loan').map((a) => Math.min(0, balances.get(a.id) ?? 0)))
+  );
   const savingsTotal = totalSavings(savings);
   const netWorth = round2(assets + debt + savingsTotal);
 

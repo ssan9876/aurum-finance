@@ -149,6 +149,7 @@ export async function simplefinDisconnect(service: DataService) {
 function guessAccountType(name: string): Account['type'] {
   const n = name.toLowerCase();
   if (/credit|card/.test(n)) return 'credit';
+  if (/loan|mortgage|heloc|student|auto ?loan/.test(n)) return 'loan';
   if (/sav/.test(n)) return 'savings';
   if (/invest|broker|401|ira/.test(n)) return 'investment';
   return 'checking';

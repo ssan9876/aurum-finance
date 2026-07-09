@@ -20,6 +20,7 @@ import { FREQUENCIES } from '@/shared/defaults';
 import { round2, sum } from '@/lib/utils';
 import type {
   Account,
+  AccountType,
   Bill,
   Budget,
   Category,
@@ -279,6 +280,21 @@ export const totalSavings = (savings: SavingsAccount[]) => round2(sum(savings.ma
 export function savingsAccountsBalance(accounts: Account[], txs: Transaction[]): number {
   return round2(
     sum(accounts.filter((a) => !a.archived && a.type === 'savings').map((a) => accountBalance(a, txs)))
+  );
+}
+
+/**
+ * Outstanding debt (a value ≤ 0) across non-archived accounts of a given type.
+ * Credit cards and loans carry negative running balances; only the amount owed
+ * is counted, so an overpaid card doesn't read as a positive "debt".
+ */
+export function accountTypeDebt(accounts: Account[], txs: Transaction[], type: AccountType): number {
+  return round2(
+    sum(
+      accounts
+        .filter((a) => !a.archived && a.type === type)
+        .map((a) => Math.min(0, accountBalance(a, txs)))
+    )
   );
 }
 

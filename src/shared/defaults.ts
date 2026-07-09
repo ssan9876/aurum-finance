@@ -79,6 +79,7 @@ export const ACCOUNT_TYPES = [
   { value: 'credit', label: 'Credit Card', icon: 'credit-card' },
   { value: 'cash', label: 'Cash', icon: 'banknote' },
   { value: 'investment', label: 'Investment', icon: 'trending-up' },
+  { value: 'loan', label: 'Loan', icon: 'landmark' },
 ] as const;
 
 export const PAYMENT_METHODS = [

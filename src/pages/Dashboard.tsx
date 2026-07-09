@@ -8,7 +8,9 @@ import { endOfMonth, format, startOfMonth } from 'date-fns';
 import {
   ArrowRight,
   CalendarClock,
+  CreditCard,
   Flame,
+  Landmark,
   PiggyBank,
   Plus,
   Receipt,
@@ -48,6 +50,7 @@ import {
   useTransactions,
 } from '@/data/hooks';
 import {
+  accountTypeDebt,
   billState,
   budgetStatuses,
   healthScore,
@@ -110,13 +113,19 @@ export default function Dashboard() {
       monthExpense,
       monthIncomeActual,
       plannedMonthlyIncome,
-      // Savings-type accounts live in the Total Savings card, so keep them out
-      // of the Account Balance total to avoid double-counting.
+      // Savings, credit cards and loans each get their own card, so keep them
+      // out of the Account Balance total to avoid double-counting.
       accountTotal: totalAccountBalance(
-        accounts.filter((a) => a.type !== 'savings'),
+        accounts.filter((a) => !['savings', 'credit', 'loan'].includes(a.type)),
         transactions
       ),
-      spendingAccountCount: accounts.filter((a) => !a.archived && a.type !== 'savings').length,
+      spendingAccountCount: accounts.filter(
+        (a) => !a.archived && !['savings', 'credit', 'loan'].includes(a.type)
+      ).length,
+      creditDebt: accountTypeDebt(accounts, transactions, 'credit'),
+      creditCount: accounts.filter((a) => !a.archived && a.type === 'credit').length,
+      loanDebt: accountTypeDebt(accounts, transactions, 'loan'),
+      loanCount: accounts.filter((a) => !a.archived && a.type === 'loan').length,
       savingsTotal,
       savingsAccountsTotal,
       yearlySalary: totalYearlyIncome(incomeSources),
@@ -212,6 +221,20 @@ export default function Dashboard() {
               'Across all savings accounts'
             )
           }
+        />
+        <StatCard
+          label="Credit Card"
+          value={fmtMoney(Math.abs(d.creditDebt), { compact: true })}
+          tone={d.creditDebt < 0 ? 'negative' : 'default'}
+          icon={<CreditCard />}
+          sub={d.creditCount > 0 ? `Owed across ${d.creditCount} card${d.creditCount > 1 ? 's' : ''}` : 'No credit cards'}
+        />
+        <StatCard
+          label="Loans"
+          value={fmtMoney(Math.abs(d.loanDebt), { compact: true })}
+          tone={d.loanDebt < 0 ? 'negative' : 'default'}
+          icon={<Landmark />}
+          sub={d.loanCount > 0 ? `Owed across ${d.loanCount} loan${d.loanCount > 1 ? 's' : ''}` : 'No loans'}
         />
         <StatCard
           label="Monthly Income"

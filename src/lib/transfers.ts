@@ -36,6 +36,15 @@ export interface TransferPair<T extends TransferSide> {
 /** How far apart the two sides may post (banks often settle a day or two apart). */
 export const MAX_PAIR_GAP_DAYS = 3;
 
+/**
+ * Reserved tag marking an expense/income row as one leg of an account-to-account
+ * move (no schema change — same pattern as the "Paid Bill" tag). Both legs keep
+ * their original type so account balances stay correct, but tagged rows are
+ * excluded from income/expense reporting (see `countsAsTransfer` in finance.ts).
+ * This is the non-destructive alternative to merging a pair into one transfer row.
+ */
+export const TRANSFER_TAG = 'Transfer';
+
 const TRANSFER_TEXT =
   /(transfer|\bxfer\b|\bxfr\b|to share|from share|share \d|to (checking|savings|chk|sav)\b|from (checking|savings|chk|sav)\b|payment thank you|thank you payment|auto ?pay|card ?(payment|pmt)|crcardpmt|\bepay\b|e-payment|online (payment|pmt)|ach pmt|internal|move money|moved? to|withdrawal to|deposit from)/i;
 

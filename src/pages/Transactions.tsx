@@ -78,7 +78,8 @@ import { looksLikeOfx, ofxToTransactions, parseOfx, type OfxParseResult } from '
 import { RULES_KEY, applyRulesToDrafts, parseRules } from '@/lib/rules';
 import { applyKeywordsToDrafts } from '@/lib/keywords';
 import { applySavingsCategory } from '@/lib/savings-category';
-import { detectTransferPairs, mergedTransferFields, type TransferPair } from '@/lib/transfers';
+import { detectTransferPairs, mergedTransferFields, TRANSFER_TAG, type TransferPair } from '@/lib/transfers';
+import { countsAsTransfer } from '@/lib/finance';
 import { parseTags, serializeTags, type Account, type Category, type Setting, type Transaction } from '@/shared/types';
 import { PAYMENT_METHODS } from '@/shared/defaults';
 import { cn } from '@/lib/utils';
@@ -90,6 +91,16 @@ type SortKey = 'date' | 'amount' | 'merchant';
 
 /** Reserved tag marking a transaction as a bill payment (no schema change). */
 export const PAID_BILL_TAG = 'Paid Bill';
+
+/** True when a row carries the reserved Transfer tag (a verified transfer leg). */
+const isTaggedTransfer = (t: Transaction) => parseTags(t.tags).includes(TRANSFER_TAG);
+
+/** Add/remove the reserved Transfer tag, preserving the row's other tags. */
+const withTransferTag = (t: Transaction, on: boolean): string => {
+  const tags = parseTags(t.tags).filter((x) => x !== TRANSFER_TAG);
+  if (on) tags.push(TRANSFER_TAG);
+  return serializeTags(tags);
+};
 
 /**
  * Fill categories on import drafts: learned merchant rules first, then the
@@ -127,6 +138,11 @@ export default function Transactions() {
   const refreshAll = useRefreshAll();
   const [transferPairs, setTransferPairs] = React.useState<TransferPair<Transaction>[] | null>(null);
   const [mergingTransfers, setMergingTransfers] = React.useState(false);
+  // Auto-scan review flow (keep both rows, tag them so they don't count as income).
+  const [reviewOpen, setReviewOpen] = React.useState(false);
+  const [reviewChecked, setReviewChecked] = React.useState<Set<number>>(new Set());
+  const [reviewDismissed, setReviewDismissed] = React.useState(false);
+  const [markingTransfers, setMarkingTransfers] = React.useState(false);
 
   /* --------------------------------- state -------------------------------- */
   const q = params.get('q') ?? '';
@@ -209,11 +225,21 @@ export default function Transactions() {
     let income = 0;
     let expense = 0;
     for (const t of filtered) {
+      if (countsAsTransfer(t)) continue;
       if (t.type === 'income') income += t.amount;
       else if (t.type === 'expense') expense += t.amount;
     }
     return { income, expense };
   }, [filtered]);
+
+  // Likely account-to-account moves that haven't been reviewed yet. Rows already
+  // tagged as transfers (or true transfer rows) are excluded so verified pairs
+  // don't keep reappearing. Recomputes whenever transactions change (e.g. after
+  // an import or bank sync), so the review banner surfaces new pairs on its own.
+  const pendingTransfers = React.useMemo(
+    () => detectTransferPairs((transactions ?? []).filter((t) => !isTaggedTransfer(t))),
+    [transactions]
+  );
 
   /* ------------------------------- actions -------------------------------- */
   const toggleSort = (key: SortKey) =>
@@ -254,10 +280,44 @@ export default function Transactions() {
     toast.success(flagged ? 'Removed paid-bill flag' : 'Flagged as paid bill');
   }
 
+  /** Open the review panel for the auto-detected (still-unverified) pairs. */
+  function openReview() {
+    setReviewChecked(new Set(pendingTransfers.map((_, i) => i))); // all checked by default
+    setReviewOpen(true);
+  }
+
+  /** Tag both legs of each checked pair so they stop counting as income. */
+  async function applyReview() {
+    setMarkingTransfers(true);
+    try {
+      const pairs = pendingTransfers.filter((_, i) => reviewChecked.has(i));
+      for (const pair of pairs) {
+        await api.update('transaction', pair.out.id!, { tags: withTransferTag(pair.out, true) });
+        await api.update('transaction', pair.in.id!, { tags: withTransferTag(pair.in, true) });
+      }
+      refreshAll();
+      toast.success(`Marked ${pairs.length} transfer${pairs.length === 1 ? '' : 's'}`, {
+        description: 'Both rows stay, but no longer count as income. Undo any from the row menu.',
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not mark transfers');
+    } finally {
+      setMarkingTransfers(false);
+      setReviewOpen(false);
+    }
+  }
+
+  /** Row action: flag/unflag a single row as a transfer leg. */
+  async function toggleTransferTag(t: Transaction) {
+    const on = !isTaggedTransfer(t);
+    await updateTx.mutateAsync({ id: t.id, data: { tags: withTransferTag(t, on) } });
+    toast.success(on ? 'Marked as transfer' : 'Removed transfer flag');
+  }
+
   /** Find existing expense/income pairs that are really one account move. */
   function scanTransfers() {
     if (!transactions) return;
-    const pairs = detectTransferPairs(transactions);
+    const pairs = detectTransferPairs(transactions.filter((t) => !isTaggedTransfer(t)));
     if (pairs.length === 0) {
       toast.info('No duplicate transfers found.', {
         description: 'Looked for matching opposite amounts between two accounts within a few days.',
@@ -347,6 +407,27 @@ export default function Transactions() {
           </>
         }
       />
+
+      {/* Auto-detected transfers awaiting review */}
+      {pendingTransfers.length > 0 && !reviewDismissed && (
+        <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3">
+          <ArrowRightLeft className="h-4 w-4 text-primary shrink-0" />
+          <p className="text-sm flex-1 min-w-[12rem]">
+            <span className="font-medium">
+              {pendingTransfers.length} possible transfer{pendingTransfers.length === 1 ? '' : 's'} found
+            </span>
+            <span className="text-muted-foreground">
+              {' '}— matching amounts moved between two accounts. Review so they don’t count as income.
+            </span>
+          </p>
+          <Button size="sm" onClick={openReview}>
+            Review
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setReviewDismissed(true)}>
+            Dismiss
+          </Button>
+        </div>
+      )}
 
       {/* Search + filters */}
       <div className="flex flex-wrap items-center gap-2 mb-3">
@@ -576,7 +657,9 @@ export default function Transactions() {
                         onSave={(v) => updateTx.mutateAsync({ id: t.id, data: { merchant: v } })}
                       >
                         <span className="flex items-center gap-1.5 min-w-0">
-                          {t.type === 'transfer' && <ArrowRightLeft className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+                          {(t.type === 'transfer' || isTaggedTransfer(t)) && (
+                            <ArrowRightLeft className="h-3.5 w-3.5 text-muted-foreground shrink-0" aria-label="Transfer" />
+                          )}
                           <span className="truncate font-medium">{t.merchant || '—'}</span>
                           {t.recurring && <Repeat className="h-3 w-3 text-muted-foreground shrink-0" aria-label="Recurring" />}
                           {parseTags(t.tags).includes(PAID_BILL_TAG) && (
@@ -623,7 +706,7 @@ export default function Transactions() {
                         value={t.amount}
                         onSave={(v) => updateTx.mutateAsync({ id: t.id, data: { amount: v } })}
                       >
-                        <Amount value={t.amount} type={t.type} />
+                        <Amount value={t.amount} type={isTaggedTransfer(t) ? 'transfer' : t.type} />
                       </InlineNumber>
                     </TableCell>
                     <TableCell>
@@ -649,6 +732,12 @@ export default function Transactions() {
                             <Receipt />{' '}
                             {parseTags(t.tags).includes(PAID_BILL_TAG) ? 'Remove paid-bill flag' : 'Flag as paid bill'}
                           </DropdownMenuItem>
+                          {t.type !== 'transfer' && (
+                            <DropdownMenuItem onClick={() => toggleTransferTag(t)}>
+                              <ArrowRightLeft />{' '}
+                              {isTaggedTransfer(t) ? 'Remove transfer flag' : 'Mark as transfer'}
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuSeparator />
                           <DropdownMenuItem className="text-destructive" onClick={() => deleteWithUndo([t], 'Transaction deleted')}>
                             <Trash2 /> Delete
@@ -688,6 +777,69 @@ export default function Transactions() {
 
       <TransactionDialog open={dialogOpen} onOpenChange={setDialogOpen} transaction={editing} />
       <ImportDialog open={importOpen} onOpenChange={setImportOpen} />
+      {/* Review + verify auto-detected transfers (keeps both rows, tags them) */}
+      <Dialog open={reviewOpen} onOpenChange={(o) => !markingTransfers && setReviewOpen(o)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Review transfers</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            These look like the same money moving between two of your accounts. Uncheck any that
+            aren’t transfers. Checked pairs keep both rows but stop counting as income.
+          </p>
+          <div className="max-h-[50vh] overflow-y-auto -mx-1 px-1 space-y-2">
+            {pendingTransfers.map((pair, i) => {
+              const outAcc = accById.get(pair.out.accountId ?? '')?.name ?? 'Unknown';
+              const inAcc = accById.get(pair.in.accountId ?? '')?.name ?? 'Unknown';
+              return (
+                <label
+                  key={pair.out.id}
+                  className="flex items-start gap-3 rounded-md border p-3 cursor-pointer hover:bg-muted/40"
+                >
+                  <Checkbox
+                    className="mt-0.5"
+                    checked={reviewChecked.has(i)}
+                    onCheckedChange={(v) =>
+                      setReviewChecked((prev) => {
+                        const next = new Set(prev);
+                        if (v) next.add(i);
+                        else next.delete(i);
+                        return next;
+                      })
+                    }
+                    aria-label={`Mark ${pair.out.merchant} as a transfer`}
+                  />
+                  <div className="min-w-0 flex-1 text-sm">
+                    <div className="flex items-center gap-2 font-medium">
+                      <span className="truncate">{outAcc}</span>
+                      <ArrowRightLeft className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      <span className="truncate">{inAcc}</span>
+                      <span className="ml-auto tabular-nums shrink-0">{fmtMoney(pair.out.amount)}</span>
+                    </div>
+                    <div className="text-xs text-muted-foreground truncate">
+                      {fmtDate(pair.out.date)} · {pair.out.merchant || '—'} → {pair.in.merchant || '—'}
+                    </div>
+                  </div>
+                </label>
+              );
+            })}
+          </div>
+          <DialogFooter className="gap-2 sm:justify-between">
+            <span className="text-xs text-muted-foreground self-center">
+              {reviewChecked.size} of {pendingTransfers.length} selected
+            </span>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setReviewOpen(false)} disabled={markingTransfers}>
+                Cancel
+              </Button>
+              <Button onClick={applyReview} disabled={markingTransfers || reviewChecked.size === 0}>
+                {markingTransfers ? 'Marking…' : `Mark ${reviewChecked.size} as transfer${reviewChecked.size === 1 ? '' : 's'}`}
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <ConfirmDialog
         open={transferPairs !== null}
         onOpenChange={(o) => !o && !mergingTransfers && setTransferPairs(null)}

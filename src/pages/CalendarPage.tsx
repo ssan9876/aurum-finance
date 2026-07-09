@@ -27,7 +27,7 @@ import { TransactionDialog } from '@/components/forms/TransactionDialog';
 import { useSettings } from '@/state/settings';
 import { useBills, useCategories, useIncomeSources, useTransactions } from '@/data/hooks';
 import { cn, round2, sum } from '@/lib/utils';
-import { billState } from '@/lib/finance';
+import { billState, countsAsTransfer } from '@/lib/finance';
 
 export default function CalendarPage() {
   const { fmtMoney, fmtDate } = useSettings();
@@ -118,8 +118,8 @@ export default function CalendarPage() {
             {days.map((day) => {
               const key = format(day, 'yyyy-MM-dd');
               const dayTx = txByDay.get(key) ?? [];
-              const income = round2(sum(dayTx.filter((t) => t.type === 'income').map((t) => t.amount)));
-              const expense = round2(sum(dayTx.filter((t) => t.type === 'expense').map((t) => t.amount)));
+              const income = round2(sum(dayTx.filter((t) => t.type === 'income' && !countsAsTransfer(t)).map((t) => t.amount)));
+              const expense = round2(sum(dayTx.filter((t) => t.type === 'expense' && !countsAsTransfer(t)).map((t) => t.amount)));
               const dayBills = billsOn(day);
               const dayPay = paydaysOn(day);
               const inMonth = isSameMonth(day, month);

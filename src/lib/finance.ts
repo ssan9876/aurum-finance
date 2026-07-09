@@ -17,7 +17,9 @@ import {
   subMonths,
 } from 'date-fns';
 import { FREQUENCIES } from '@/shared/defaults';
+import { TRANSFER_TAG } from '@/lib/transfers';
 import { round2, sum } from '@/lib/utils';
+import { parseTags } from '@/shared/types';
 import type {
   Account,
   AccountType,
@@ -30,6 +32,15 @@ import type {
   SavingsSnapshot,
   Transaction,
 } from '@/shared/types';
+
+/**
+ * True when a row must be kept out of income/expense reporting: an actual
+ * `transfer` row, or an expense/income leg tagged as a transfer (a verified
+ * account-to-account move). Balance math is unaffected — it still sums the
+ * row by its real type — this only governs the income/expense/category totals.
+ */
+export const countsAsTransfer = (t: Pick<Transaction, 'type' | 'tags'>): boolean =>
+  t.type === 'transfer' || parseTags(t.tags).includes(TRANSFER_TAG);
 
 /* ------------------------------- frequencies ----------------------------- */
 
@@ -90,7 +101,7 @@ export function monthlySeries(txs: Transaction[], months: number, end = new Date
     index.set(key, p);
   }
   for (const t of txs) {
-    if (t.type === 'transfer') continue;
+    if (countsAsTransfer(t)) continue;
     const p = index.get(monthKey(t.date));
     if (!p) continue;
     if (t.type === 'income') p.income += t.amount;
@@ -112,10 +123,10 @@ export function txInRange(txs: Transaction[], from: Date, to: Date): Transaction
 }
 
 export const expensesIn = (txs: Transaction[], from: Date, to: Date) =>
-  txInRange(txs, from, to).filter((t) => t.type === 'expense');
+  txInRange(txs, from, to).filter((t) => t.type === 'expense' && !countsAsTransfer(t));
 
 export const incomeIn = (txs: Transaction[], from: Date, to: Date) =>
-  txInRange(txs, from, to).filter((t) => t.type === 'income');
+  txInRange(txs, from, to).filter((t) => t.type === 'income' && !countsAsTransfer(t));
 
 /* ------------------------------- categories ------------------------------ */
 

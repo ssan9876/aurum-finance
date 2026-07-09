@@ -121,6 +121,22 @@ export function TransactionDialog({
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) =>
     setDraft((d) => ({ ...d, [key]: value }));
 
+  // Switching between expense/income invalidates the selected category (they
+  // are typed) — clear it instead of silently saving a wrong-type category.
+  const setType = (type: TransactionType) =>
+    setDraft((d) => {
+      if (type === d.type) return d;
+      const nextCatType = type === 'income' ? 'income' : 'expense';
+      const cat = categories.find((c) => c.id === d.categoryId);
+      const keep = cat?.type === nextCatType;
+      return {
+        ...d,
+        type,
+        categoryId: keep ? d.categoryId : '',
+        subcategoryId: keep ? d.subcategoryId : '',
+      };
+    });
+
   const catType = draft.type === 'income' ? 'income' : 'expense';
   const topCategories = categories.filter((c) => !c.parentId && c.type === catType);
   const subcategories = categories.filter((c) => c.parentId === draft.categoryId);
@@ -227,7 +243,7 @@ export function TransactionDialog({
               type="button"
               role="radio"
               aria-checked={draft.type === t.value}
-              onClick={() => set('type', t.value)}
+              onClick={() => setType(t.value)}
               className={cn(
                 'flex items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors cursor-pointer',
                 draft.type === t.value

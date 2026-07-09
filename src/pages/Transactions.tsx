@@ -207,7 +207,9 @@ export default function Transactions() {
       if (accountId !== 'all' && t.accountId !== accountId && t.toAccountId !== accountId) return false;
       if (method !== 'all' && t.paymentMethod !== method) return false;
       if (tag !== 'all' && !parseTags(t.tags).includes(tag)) return false;
-      if (from && t.date < from) return false;
+      // Compare calendar days only — DateField stores local noon as ISO, while
+      // transactions can post at any time of day (imports use midnight/noon).
+      if (from && t.date.slice(0, 10) < from.slice(0, 10)) return false;
       if (to && t.date > to.slice(0, 10) + 'T23:59:59.999Z') return false;
       if (needle) {
         const hay = [
@@ -275,7 +277,9 @@ export default function Transactions() {
   }
 
   async function handleDuplicate(t: Transaction) {
-    const { id, createdAt, updatedAt, ...rest } = t;
+    const { id, createdAt, updatedAt, externalId, ...rest } = t;
+    // externalId stays behind: it's the bank's identity for the ORIGINAL row,
+    // and copying it would make the duplicate absorb future import dedup.
     await createTx.mutateAsync({ ...rest, date: new Date().toISOString() });
     toast.success('Transaction duplicated');
   }
@@ -1061,9 +1065,10 @@ function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o:
     if (!file) return;
     try {
       const isOfxName = /\.(ofx|qfx)$/i.test(file.name);
-      const text = isOfxName ? await readFileAsText(file) : null;
-      if (isOfxName || (text && looksLikeOfx(text))) {
-        const result = parseOfx(text ?? (await readFileAsText(file)));
+      // Sniff content too — some banks serve OFX with a .csv/.txt extension.
+      const text = await readFileAsText(file);
+      if (isOfxName || looksLikeOfx(text)) {
+        const result = parseOfx(text);
         if (result.transactions.length === 0) {
           toast.error('No transactions found in that OFX/QFX file.');
           return;

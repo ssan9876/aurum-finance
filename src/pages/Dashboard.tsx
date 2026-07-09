@@ -92,7 +92,9 @@ export default function Dashboard() {
   const loading =
     txLoading || !transactions || !accounts || !categories || !incomeSources || !savings || !snapshots || !budgets || !bills;
 
-  const now = new Date();
+  // Stable per mount: a fresh Date each render would invalidate the derived
+  // memo below on every render, recomputing all charts for no reason.
+  const now = React.useMemo(() => new Date(), []);
 
   const derived = React.useMemo(() => {
     if (loading) return null;
@@ -162,10 +164,8 @@ export default function Dashboard() {
           sub: '/mo',
         }))
         .sort((a, b) => b.value - a.value),
-      upcomingBills: [...bills]
-        .filter((b) => billState(b, now) !== 'overdue' || true)
-        .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
-        .slice(0, 5),
+      // Overdue bills are included on purpose — they sort first and get a badge.
+      upcomingBills: [...bills].sort((a, b) => a.dueDate.localeCompare(b.dueDate)).slice(0, 5),
       recent: transactions.slice(0, 8),
     };
   }, [loading, transactions, accounts, categories, incomeSources, savings, snapshots, budgets, bills, now]);

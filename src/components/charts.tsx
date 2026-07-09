@@ -22,6 +22,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import { Eye, EyeOff } from 'lucide-react';
 import { useSettings } from '@/state/settings';
 import { cn } from '@/lib/utils';
 
@@ -289,13 +290,23 @@ export function CategoryDonut({
   data,
   height = 240,
   maxSlices = 7,
+  onSelect,
 }: {
-  data: { name: string; value: number; color: string }[];
+  data: { name: string; value: number; color: string; id?: string }[];
   height?: number;
   maxSlices?: number;
+  /** When set, a slice/legend click drills in (e.g. to a filtered list). */
+  onSelect?: (slice: { name: string; id?: string }) => void;
 }) {
   const { fmtMoney } = useSettings();
   const [hidden, setHidden] = React.useState<Set<string>>(new Set());
+  const toggleHidden = (name: string) =>
+    setHidden((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
 
   const folded = React.useMemo(() => {
     if (data.length <= maxSlices) return data;
@@ -312,7 +323,7 @@ export function CategoryDonut({
 
   return (
     <div className="flex flex-col sm:flex-row items-center gap-2">
-      <div style={{ height, width: height }} className="shrink-0 relative">
+      <div style={{ height, width: height }} className={cn('shrink-0 relative', onSelect && 'cursor-pointer')}>
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Tooltip
@@ -332,6 +343,11 @@ export function CategoryDonut({
               outerRadius="92%"
               paddingAngle={2}
               strokeWidth={0}
+              onClick={
+                onSelect
+                  ? (entry: any) => onSelect({ name: entry?.name, id: entry?.payload?.id ?? entry?.id })
+                  : undefined
+              }
             >
               {visible.map((d) => (
                 <Cell key={d.name} fill={d.color} />
@@ -348,22 +364,16 @@ export function CategoryDonut({
         {folded.map((d) => {
           const off = hidden.has(d.name);
           return (
-            <li key={d.name}>
+            <li key={d.name} className="flex items-center gap-1">
               <button
                 type="button"
-                onClick={() =>
-                  setHidden((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(d.name)) next.delete(d.name);
-                    else next.add(d.name);
-                    return next;
-                  })
-                }
+                onClick={() => (onSelect ? onSelect(d) : toggleHidden(d.name))}
                 className={cn(
-                  'w-full flex items-center justify-between gap-2 rounded-md px-2 py-1 hover:bg-accent cursor-pointer transition-colors',
+                  'flex-1 min-w-0 flex items-center justify-between gap-2 rounded-md px-2 py-1 hover:bg-accent cursor-pointer transition-colors',
                   off && 'opacity-40'
                 )}
-                aria-pressed={!off}
+                aria-pressed={onSelect ? undefined : !off}
+                title={onSelect ? `View ${d.name} transactions` : undefined}
               >
                 <span className="flex items-center gap-2 min-w-0">
                   <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: d.color }} />
@@ -373,6 +383,16 @@ export function CategoryDonut({
                   {total > 0 && !off ? `${Math.round((d.value / total) * 100)}%` : '—'}
                 </span>
               </button>
+              {onSelect && (
+                <button
+                  type="button"
+                  onClick={() => toggleHidden(d.name)}
+                  className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent shrink-0"
+                  aria-label={off ? `Show ${d.name} in chart` : `Hide ${d.name} from chart`}
+                >
+                  {off ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                </button>
+              )}
             </li>
           );
         })}

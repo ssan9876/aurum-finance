@@ -3,7 +3,7 @@
  * activity and the financial health score.
  */
 import * as React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { endOfMonth, format, startOfMonth } from 'date-fns';
 import {
   ArrowRight,
@@ -69,7 +69,16 @@ import {
 
 export default function Dashboard() {
   const ui = useUI();
+  const navigate = useNavigate();
   const { fmtMoney, fmtDate } = useSettings();
+
+  // Drill from a category slice into its filtered transaction list. The
+  // Uncategorized bucket carries the sentinel id '__none__'; folded "Other"
+  // has no id, so it isn't clickable.
+  const openCategory = (slice: { id?: string }) => {
+    if (!slice.id) return;
+    navigate(`/transactions?category=${slice.id === '__none__' ? 'uncategorized' : slice.id}`);
+  };
 
   const { data: transactions, isLoading: txLoading } = useTransactions();
   const { data: accounts } = useAccounts();
@@ -138,6 +147,7 @@ export default function Dashboard() {
         name: s.category.name,
         value: s.amount,
         color: s.category.color,
+        id: s.category.id, // '__none__' for the Uncategorized bucket
       })),
       savingsHistory: savingsHistorySeries(savings, snapshots, 12, now).map((p) => ({
         label: p.label,
@@ -295,7 +305,7 @@ export default function Dashboard() {
             {d.donut.length === 0 ? (
               <EmptyState icon={<WalletCards />} title="No spending yet" className="py-8" />
             ) : (
-              <CategoryDonut data={d.donut} height={170} />
+              <CategoryDonut data={d.donut} height={170} onSelect={openCategory} />
             )}
           </CardContent>
         </Card>

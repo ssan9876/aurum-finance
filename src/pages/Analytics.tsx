@@ -4,6 +4,7 @@
  * CSV/Excel report export.
  */
 import * as React from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   differenceInCalendarDays,
   eachDayOfInterval,
@@ -93,6 +94,11 @@ function periodRange(key: PeriodKey, now = new Date()): { from: Date; to: Date }
 
 export default function Analytics() {
   const { fmtMoney } = useSettings();
+  const navigate = useNavigate();
+  const openCategory = (slice: { id?: string }) => {
+    if (!slice.id) return;
+    navigate(`/transactions?category=${slice.id === '__none__' ? 'uncategorized' : slice.id}`);
+  };
   const { data: transactions, isLoading } = useTransactions();
   const { data: categories = [] } = useCategories();
   const { data: accounts = [] } = useAccounts();
@@ -124,7 +130,7 @@ export default function Analytics() {
   const avgDaily = round2(totalExpense / days);
 
   const breakdown = spendByCategory(transactions, categories, from, to);
-  const donut = breakdown.map((b) => ({ name: b.category.name, value: b.amount, color: b.category.color }));
+  const donut = breakdown.map((b) => ({ name: b.category.name, value: b.amount, color: b.category.color, id: b.category.id }));
   const trend = monthlySeries(transactions, chartMonths, now);
   const netWorth = netWorthSeries(accounts, transactions, savings, snapshots, chartMonths, now).map((p) => ({
     label: p.label,
@@ -268,7 +274,7 @@ export default function Analytics() {
                 {donut.length === 0 ? (
                   <EmptyState icon={<BarChart3 />} title="No expenses in this period" className="py-8" />
                 ) : (
-                  <CategoryDonut data={donut} height={190} />
+                  <CategoryDonut data={donut} height={190} onSelect={openCategory} />
                 )}
               </CardContent>
             </Card>

@@ -155,7 +155,8 @@ export default function Transactions() {
     }, { replace: true });
 
   const [type, setType] = React.useState('all');
-  const [categoryId, setCategoryId] = React.useState('all');
+  // Seed from ?category=<id|'uncategorized'> so dashboard/analytics donut drill-ins land filtered.
+  const [categoryId, setCategoryId] = React.useState(() => params.get('category') ?? 'all');
   // Seed from ?account=<id> so sidebar savings links and deep links land filtered.
   const [accountId, setAccountId] = React.useState(() => params.get('account') ?? 'all');
   const [method, setMethod] = React.useState('all');
@@ -178,6 +179,13 @@ export default function Transactions() {
     if (accountParam) setAccountId(accountParam);
   }, [accountParam]);
 
+  // Follow ?category= changes (e.g. clicking a different donut slice while
+  // already on this page).
+  const categoryParam = params.get('category');
+  React.useEffect(() => {
+    if (categoryParam) setCategoryId(categoryParam);
+  }, [categoryParam]);
+
   const catById = React.useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
   const accById = React.useMemo(() => new Map(accounts.map((a) => [a.id, a])), [accounts]);
 
@@ -189,7 +197,13 @@ export default function Transactions() {
     const needle = q.trim().toLowerCase();
     let rows = transactions.filter((t) => {
       if (type !== 'all' && t.type !== type) return false;
-      if (categoryId !== 'all' && t.categoryId !== categoryId && t.subcategoryId !== categoryId) return false;
+      if (categoryId === 'uncategorized') {
+        // Rows needing a category: no category assigned, and not a transfer
+        // (transfers legitimately have none).
+        if (t.categoryId || t.subcategoryId || t.type === 'transfer') return false;
+      } else if (categoryId !== 'all' && t.categoryId !== categoryId && t.subcategoryId !== categoryId) {
+        return false;
+      }
       if (accountId !== 'all' && t.accountId !== accountId && t.toAccountId !== accountId) return false;
       if (method !== 'all' && t.paymentMethod !== method) return false;
       if (tag !== 'all' && !parseTags(t.tags).includes(tag)) return false;
@@ -454,6 +468,7 @@ export default function Transactions() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All categories</SelectItem>
+            <SelectItem value="uncategorized">Uncategorized</SelectItem>
             {categories
               .filter((c) => !c.parentId)
               .map((c) => (

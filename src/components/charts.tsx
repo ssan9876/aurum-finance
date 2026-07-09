@@ -285,6 +285,65 @@ export function MultiLineChart({
   );
 }
 
+/**
+ * Cash-flow forecast: projected balance as an area, with a dashed zero line and
+ * an optional vertical marker on the first day the balance goes negative. The
+ * area turns red when the projection ever dips below zero.
+ */
+export function ForecastChart({
+  data,
+  height = 220,
+  warnLabel,
+}: {
+  data: { label: string; balance: number }[];
+  height?: number;
+  warnLabel?: string | null;
+}) {
+  const c = useChartColors();
+  const { settings } = useSettings();
+  const gid = React.useId().replace(/:/g, '');
+  const goesNegative = data.some((d) => d.balance < 0);
+  const stroke = goesNegative ? c.negative : c.series[0];
+  // Thin the x-axis to ~8 labels so daily points don't crowd the axis.
+  const step = Math.max(1, Math.ceil(data.length / 8));
+  const ticks = data.filter((_, i) => i % step === 0).map((d) => d.label);
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      <AreaChart data={data} margin={{ top: 4, right: 4, left: 4, bottom: 0 }}>
+        <defs>
+          <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={stroke} stopOpacity={0.25} />
+            <stop offset="100%" stopColor={stroke} stopOpacity={0.02} />
+          </linearGradient>
+        </defs>
+        <CartesianGrid vertical={false} stroke={c.grid} />
+        <XAxis dataKey="label" {...axisProps(c.axis)} ticks={ticks} interval={0} />
+        <YAxis {...axisProps(c.axis)} tickFormatter={compactMoney(settings.currency)} width={56} />
+        <Tooltip content={moneyTooltip()} cursor={{ stroke: c.axis, strokeDasharray: '3 3' }} />
+        <ReferenceLine y={0} stroke={c.negative} strokeDasharray="4 4" strokeWidth={1} />
+        {warnLabel && (
+          <ReferenceLine
+            x={warnLabel}
+            stroke={c.negative}
+            strokeDasharray="3 3"
+            label={{ value: 'Below $0', fill: c.negative, fontSize: 10, position: 'insideTopRight' }}
+          />
+        )}
+        <Area
+          type="monotone"
+          dataKey="balance"
+          name="Projected balance"
+          stroke={stroke}
+          strokeWidth={2}
+          fill={`url(#${gid})`}
+          dot={false}
+          activeDot={{ r: 4 }}
+        />
+      </AreaChart>
+    </ResponsiveContainer>
+  );
+}
+
 /** Donut + interactive legend. Slices past `maxSlices` fold into “Other”. */
 export function CategoryDonut({
   data,

@@ -31,12 +31,14 @@ import { Amount, CategoryChip, EmptyState, PageHeader, StatCard } from '@/compon
 import {
   CashFlowChart,
   CategoryDonut,
+  ForecastChart,
   IncomeExpenseChart,
   SpendingBarChart,
   TrendAreaChart,
   BarList,
 } from '@/components/charts';
 import { EntityIcon } from '@/lib/icons';
+import { cn } from '@/lib/utils';
 import { useSettings } from '@/state/settings';
 import { useUI } from '@/state/ui';
 import {
@@ -66,6 +68,7 @@ import {
   totalSavings,
   totalYearlyIncome,
 } from '@/lib/finance';
+import { cashFlowForecast } from '@/lib/forecast';
 
 export default function Dashboard() {
   const ui = useUI();
@@ -108,6 +111,11 @@ export default function Dashboard() {
     const savingsTotal = totalSavings(savings) + savingsAccountsTotal;
     const statuses = budgetStatuses(budgets, categories, transactions, now);
     const prediction = predictMonthSpend(transactions, now);
+    const forecast = cashFlowForecast(accounts, transactions, bills, incomeSources, {
+      horizonDays: 60,
+      safeDays: 30,
+      now,
+    });
     const rate = monthlyIncome > 0 ? ((monthlyIncome - monthExpense) / monthlyIncome) * 100 : 0;
     const health = healthScore({
       monthlyIncome,
@@ -143,6 +151,7 @@ export default function Dashboard() {
       rate,
       statuses,
       prediction,
+      forecast,
       streak: savingsStreak(transactions, now),
       health,
       donut: spendByCategory(transactions, categories, startOfMonth(now), endOfMonth(now)).map((s) => ({
@@ -284,6 +293,43 @@ export default function Dashboard() {
           icon={<WalletCards />}
           sub={`Day ${now.getDate()} of ${format(endOfMonth(now), 'd')}`}
         />
+      </div>
+
+      {/* Cash-flow forecast */}
+      <div className="grid gap-4 mt-4">
+        <Card className="animate-fade-up">
+          <CardHeader className="flex-row items-start justify-between space-y-0 gap-4">
+            <div className="min-w-0">
+              <CardTitle>Cash Flow Forecast</CardTitle>
+              <p className="text-xs text-muted-foreground mt-1">
+                Projected balance over the next 60 days from bills, income and recurring spend
+              </p>
+            </div>
+            <div className="text-right shrink-0">
+              <p className="text-xs text-muted-foreground">Safe to spend</p>
+              <p
+                className={cn(
+                  'text-2xl font-semibold tabular-nums',
+                  d.forecast.safeToSpend > 0 ? 'text-success' : 'text-destructive'
+                )}
+              >
+                {fmtMoney(d.forecast.safeToSpend, { compact: true })}
+              </p>
+              {d.forecast.warnLabel ? (
+                <Badge variant="destructive" className="mt-1">
+                  Below $0 by {d.forecast.warnLabel}
+                </Badge>
+              ) : (
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Low: {fmtMoney(d.forecast.low.balance, { compact: true })}
+                </p>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            <ForecastChart data={d.forecast.points} height={220} warnLabel={d.forecast.warnLabel} />
+          </CardContent>
+        </Card>
       </div>
 
       {/* Charts row 1 */}

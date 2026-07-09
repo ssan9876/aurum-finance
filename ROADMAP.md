@@ -13,11 +13,15 @@ Scheduler tick tightened to 15 minutes. Catch-up run if the server was off
 through the whole window.
 - `server/scheduler.ts`, `src/components/settings/AutomationCard.tsx`
 
-### 1b. Forecast engine (pure lib)
-`src/lib/forecast.ts`: project balances forward 30–90 days from bills
-(due dates + frequency), income sources (`nextPayDate` + frequency) and
-recurring transactions. Returns a daily series + events (bill X on date Y).
-Everything in Phase 2 consumes this.
+### 1b. Forecast engine (pure lib) ✅ (v1.4.2)
+`src/lib/forecast.ts` — `cashFlowForecast(accounts, txs, bills, incomeSources,
+opts)` projects the liquid balance forward (default 60 days) from bills
+(next due + frequency), income sources (`nextPayDate` + frequency) and
+recurring-flagged transactions (monthly). Returns a daily point series +
+events + `safeToSpend` (near-horizon trough, floored at 0) + `warnLabel`
+(first sub-zero day). Double-count guards: start balance from txs ≤ today,
+bills clamp overdue to today, income never clamps, recurring-tx projections
+skip merchants that match a bill/income name.
 
 ### 1c. AI plumbing (server)
 `server/ai.ts`: thin Claude API client (plain fetch, no SDK dep), API key in
@@ -26,10 +30,11 @@ Endpoint `POST /api/ai/*` guarded by `requireKey`. Unlocks features 4–6.
 
 ## Phase 2 — Money intelligence (no AI required)
 
-### 2. Cash-flow forecast / "Safe to Spend"
-Dashboard card + chart: projected balance line with a "dips below $0 on …"
-warning and a safe-to-spend-today number. Consumes 1b.
-- `src/lib/forecast.ts`, `Dashboard.tsx`, one new chart in `charts.tsx`
+### 2. Cash-flow forecast / "Safe to Spend" ✅ (v1.4.2)
+Dashboard "Cash Flow Forecast" card: `ForecastChart` (area, dashed zero line,
+"Below $0" marker, red when it dips negative) + a headline safe-to-spend
+number and a "Below $0 by <date>" / "Low: <amount>" readout. Consumes 1b.
+- `src/lib/forecast.ts`, `Dashboard.tsx`, `ForecastChart` in `charts.tsx`
 
 ### 3. Subscription Detective
 Detect recurring same-merchant charges (amount tolerance + period inference),

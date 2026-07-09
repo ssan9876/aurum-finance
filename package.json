@@ -2,7 +2,7 @@
   "name": "aurum-finance",
   "productName": "Aurum",
   "description": "Aurum — local-first personal finance: budgets, bills, savings goals and analytics.",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "private": true,
   "type": "module",
   "main": "dist-electron/main.js",

@@ -57,7 +57,7 @@ import {
   monthlySeries,
   predictMonthSpend,
   savingsAccountsBalance,
-  savingsHistorySeries,
+  savingsGrowthSeries,
   savingsStreak,
   spendByCategory,
   toMonthly,
@@ -149,7 +149,7 @@ export default function Dashboard() {
         color: s.category.color,
         id: s.category.id, // '__none__' for the Uncategorized bucket
       })),
-      savingsHistory: savingsHistorySeries(savings, snapshots, 12, now).map((p) => ({
+      savingsHistory: savingsGrowthSeries(accounts, transactions, savings, snapshots, 12, now).map((p) => ({
         label: p.label,
         balance: p.balance,
       })),

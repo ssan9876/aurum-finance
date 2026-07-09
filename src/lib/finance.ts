@@ -363,6 +363,36 @@ export function savingsHistorySeries(
   return out;
 }
 
+/**
+ * Combined savings balance by month for the "Savings Growth" chart. Mirrors the
+ * dashboard's Total Savings box (savingsAccountsBalance + totalSavings): it adds
+ * the historical balance of every non-archived savings-TYPE bank account
+ * (reconstructed from transactions up to each month-end) to the SavingsAccount
+ * goal-tracker history. Without this the chart only ever saw SavingsAccount
+ * entities and read flat/zero for users who keep savings in a bank account.
+ */
+export function savingsGrowthSeries(
+  accounts: Account[],
+  txs: Transaction[],
+  savings: SavingsAccount[],
+  snapshots: SavingsSnapshot[],
+  months: number,
+  end = new Date()
+) {
+  const goalHist = savingsHistorySeries(savings, snapshots, months, end);
+  const savingsAccounts = accounts.filter((a) => !a.archived && a.type === 'savings');
+  const out: { key: string; label: string; balance: number }[] = [];
+  for (let i = months - 1; i >= 0; i--) {
+    const at = endOfMonth(subMonths(end, i));
+    const key = format(at, 'yyyy-MM');
+    const upTo = txs.filter((t) => new Date(t.date) <= at);
+    let total = goalHist.find((g) => g.key === key)?.balance ?? 0;
+    for (const a of savingsAccounts) total += accountBalance(a, upTo);
+    out.push({ key, label: format(at, 'MMM'), balance: round2(total) });
+  }
+  return out;
+}
+
 /* -------------------------------- net worth ------------------------------ */
 
 export function netWorthSeries(

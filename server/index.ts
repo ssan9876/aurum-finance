@@ -20,6 +20,7 @@ import { createMcpHandler } from './mcp';
 import { simplefinConnect, simplefinDisconnect, simplefinStatus, simplefinSync } from './simplefin';
 import { aiConnect, aiDisconnect, aiStatus, aiTest, friendlyError } from './ai';
 import { chat, type ChatMessage } from './chat';
+import { scanReceipt } from './receipt';
 import { startScheduler } from './scheduler';
 
 /**
@@ -39,7 +40,7 @@ function redactSettings(method: string, payload: any, result: unknown): unknown 
 
 const PORT = Number(process.env.PORT ?? 5533);
 const PASSWORD = process.env.AURUM_PASSWORD ?? '';
-const APP_VERSION = '1.8.0';
+const APP_VERSION = '1.9.0';
 
 // AURUM_DB wins over DATABASE_URL: Prisma's client auto-loads a project .env
 // at import time, which would otherwise silently override the service config.
@@ -133,6 +134,8 @@ app.post('/api/ai/disconnect', requireKey, ai(() => aiDisconnect(service)));
 app.post('/api/ai/test', requireKey, ai(() => aiTest(service)));
 // "Ask Aurum": read-only chat over the MCP toolset (see server/chat.ts).
 app.post('/api/ai/chat', requireKey, ai((s, body) => chat(s, (body.messages ?? []) as ChatMessage[])));
+// Receipt photo -> transaction draft (see server/receipt.ts). Nothing is saved.
+app.post('/api/ai/receipt', requireKey, ai((s, body) => scanReceipt(s, String(body.image ?? ''))));
 
 // MCP endpoint for AI assistants (Claude Desktop/Code, claude.ai connectors).
 // Same secret as /api/data; MCP clients usually send it as a Bearer token.

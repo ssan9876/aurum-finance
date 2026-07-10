@@ -6,7 +6,7 @@
 import * as React from 'react';
 import { z } from 'zod';
 import { toast } from 'sonner';
-import { ArrowRightLeft, Paperclip, TrendingDown, TrendingUp, X } from 'lucide-react';
+import { ArrowRightLeft, Loader2, Paperclip, Sparkles, TrendingDown, TrendingUp, X } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -39,8 +39,40 @@ import {
   useTags,
   useUpdateEntity,
 } from '@/data/hooks';
-import { api } from '@/data/api';
+import { api, backendMode, getServerKey } from '@/data/api';
 import { RULES_KEY, learnRule, matchRule, parseRules } from '@/lib/rules';
+
+interface ReceiptDraft {
+  merchant: string;
+  amount: number;
+  date: string;
+  description: string;
+  lineItems: { name: string; amount: number }[];
+}
+
+/** Receipt scanning needs the self-hosted server plus a connected Claude key. */
+function useReceiptScanning(): boolean {
+  const [ok, setOk] = React.useState(false);
+  React.useEffect(() => {
+    if (backendMode !== 'server') return;
+    fetch('/api/ai/status', { headers: { 'x-aurum-key': getServerKey() } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((s) => setOk(!!s?.configured))
+      .catch(() => setOk(false));
+  }, []);
+  return ok;
+}
+
+async function scanReceiptImage(image: string): Promise<ReceiptDraft> {
+  const res = await fetch('/api/ai/receipt', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-aurum-key': getServerKey() },
+    body: JSON.stringify({ image }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error ?? `Request failed (${res.status})`);
+  return data as ReceiptDraft;
+}
 
 const baseSchema = z.object({
   date: z.string().min(1, 'Date is required'),
@@ -91,6 +123,8 @@ export function TransactionDialog({
 
   const [draft, setDraft] = React.useState<Draft>(() => emptyDraft(defaultType));
   const [errors, setErrors] = React.useState<Record<string, string>>({});
+  const [scanning, setScanning] = React.useState(false);
+  const canScan = useReceiptScanning();
   const isEdit = !!transaction;
 
   React.useEffect(() => {
@@ -225,7 +259,34 @@ export function TransactionDialog({
       toast.error('Receipt images must be under 2 MB');
       return;
     }
-    set('receiptImage', await readFileAsDataUrl(file));
+    const dataUrl = await readFileAsDataUrl(file);
+    set('receiptImage', dataUrl);
+    // Offer to read it, but never overwrite what the user already typed.
+    if (canScan && !isEdit) void scanReceipt(dataUrl);
+  }
+
+  /** Ask the server to read the attached receipt and fill in the blanks. */
+  async function scanReceipt(dataUrl: string) {
+    setScanning(true);
+    try {
+      const draft = await scanReceiptImage(dataUrl);
+      setDraft((d) => ({
+        ...d,
+        // Anything the user already typed wins; the scan only fills blanks.
+        merchant: d.merchant.trim() || draft.merchant,
+        amount: d.amount === '' && draft.amount > 0 ? draft.amount : d.amount,
+        date: draft.date ? new Date(`${draft.date}T12:00:00`).toISOString() : d.date,
+        description: d.description.trim() || draft.description,
+      }));
+      const items = draft.lineItems.length ? ` · ${draft.lineItems.length} items` : '';
+      toast.success(`Read ${draft.merchant || 'receipt'}${items}`, {
+        description: 'Check the amount and date before saving.',
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not read that receipt');
+    } finally {
+      setScanning(false);
+    }
   }
 
   return (
@@ -420,6 +481,19 @@ export function TransactionDialog({
                     alt="Receipt preview"
                     className="h-9 w-9 rounded-md object-cover border"
                   />
+                  {canScan && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => scanReceipt(draft.receiptImage!)}
+                      disabled={scanning}
+                      aria-label="Scan receipt"
+                      title="Read this receipt with Claude"
+                    >
+                      {scanning ? <Loader2 className="animate-spin" /> : <Sparkles />}
+                    </Button>
+                  )}
                   <Button
                     type="button"
                     variant="ghost"
@@ -432,8 +506,8 @@ export function TransactionDialog({
                 </span>
               ) : (
                 <label className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground cursor-pointer">
-                  <Paperclip className="h-4 w-4" />
-                  Attach receipt
+                  {scanning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+                  {scanning ? 'Reading receipt…' : canScan ? 'Attach & scan receipt' : 'Attach receipt'}
                   <input
                     type="file"
                     accept="image/*"

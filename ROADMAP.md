@@ -111,10 +111,16 @@ unless backend is `server` AND a key is configured.
 **Next:** writes need their own confirmation flow before the mutating tools
 can be exposed here.
 
-### 4. Receipt scanning
-Photo/upload → Claude vision extracts merchant/amount/date/line items →
-prefills TransactionDialog (field `receiptImage` already exists).
-- `server/ai.ts` (vision request), hook in `TransactionDialog.tsx`
+### 4. Receipt scanning ✅ (v1.9.0)
+`server/receipt.ts` — vision + **structured outputs** (`output_config.format`
+json_schema), so the model can't return prose-wrapped JSON. Validates the
+data URL server-side (media type allowlist, 2 MB cap mirroring the dialog),
+then sanitizes: absolutizes amounts, drops any date not matching yyyy-MM-dd
+(no guessed dates), rejects unreadable images. `POST /api/ai/receipt` —
+nothing is persisted, it returns a draft.
+TransactionDialog auto-scans on attach (new transactions only) and shows a
+rescan button; the scan only ever fills BLANK fields, never overwrites typing.
+- `server/receipt.ts`, `TransactionDialog.tsx`
 
 ### 7. Weekly digest push
 Scheduler job (Sunday night): build a summary (top expenses, budget standing,

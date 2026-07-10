@@ -231,8 +231,11 @@ export default function Wrapped() {
     );
   }
 
-  const slide = slides[index];
-  const last = index === slides.length - 1;
+  // A year switch can shrink the deck before the reset effect runs — clamp so
+  // the transient render can't read past the end.
+  const current = Math.min(index, slides.length - 1);
+  const slide = slides[current];
+  const last = current === slides.length - 1;
 
   return (
     <div>
@@ -277,7 +280,7 @@ export default function Wrapped() {
 
         {/* Progress + controls */}
         <div className="flex items-center justify-between gap-4 border-t px-4 py-3">
-          <Button variant="ghost" size="sm" onClick={() => go(-1)} disabled={index === 0}>
+          <Button variant="ghost" size="sm" onClick={() => go(-1)} disabled={current === 0}>
             <ChevronLeft /> Back
           </Button>
           <div className="flex gap-1.5" role="tablist" aria-label="Slides">
@@ -285,15 +288,15 @@ export default function Wrapped() {
               <button
                 key={s.key}
                 onClick={() => {
-                  setDirection(i > index ? 1 : -1);
+                  setDirection(i > current ? 1 : -1);
                   setIndex(i);
                 }}
                 aria-label={`Slide ${i + 1}`}
-                aria-selected={i === index}
+                aria-selected={i === current}
                 role="tab"
                 className={cn(
                   'h-1.5 rounded-full transition-all cursor-pointer',
-                  i === index ? 'w-6 bg-primary' : 'w-1.5 bg-border hover:bg-muted-foreground/40'
+                  i === current ? 'w-6 bg-primary' : 'w-1.5 bg-border hover:bg-muted-foreground/40'
                 )}
               />
             ))}

@@ -119,8 +119,12 @@ export async function scanReceipt(service: DataService, imageDataUrl: string): P
   return {
     merchant,
     amount: Math.abs(Math.round(amount * 100) / 100),
-    // Keep only a plausible calendar date; the dialog fills today otherwise.
-    date: /^\d{4}-\d{2}-\d{2}$/.test(String(draft.date ?? '')) ? draft.date : '',
+    // Keep only a real calendar date (the ISO parser rejects 2026-13-40);
+    // the dialog fills today otherwise.
+    date:
+      /^\d{4}-\d{2}-\d{2}$/.test(String(draft.date ?? '')) && !Number.isNaN(Date.parse(draft.date))
+        ? draft.date
+        : '',
     description: String(draft.description ?? '').trim(),
     lineItems: Array.isArray(draft.lineItems)
       ? draft.lineItems

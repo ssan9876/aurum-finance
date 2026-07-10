@@ -70,6 +70,9 @@ function resultText(result: any): string {
 
 export async function chat(service: DataService, history: ChatMessage[]): Promise<ChatReply> {
   const turns = history.filter((m) => m.content.trim()).slice(-MAX_HISTORY);
+  // The API requires the first message to be a user turn; a capped slice of a
+  // long conversation can start mid-exchange on an assistant reply.
+  while (turns.length && turns[0].role !== 'user') turns.shift();
   if (!turns.length) throw new Error('Ask a question first.');
 
   const { anthropic, model } = await aiClient(service);
@@ -136,10 +139,15 @@ export async function chat(service: DataService, history: ChatMessage[]): Promis
     }
 
     // Out of steps: ask for a plain answer using whatever it has gathered.
+    // `tools` must still be sent — the history contains tool_use/tool_result
+    // blocks, which the API rejects without definitions; tool_choice: none is
+    // what actually forces a text answer.
     const final = await anthropic.messages.create({
       model,
       max_tokens: MAX_TOKENS,
       system: SYSTEM,
+      tools,
+      tool_choice: { type: 'none' },
       messages: [...messages, { role: 'user', content: 'Answer now with what you have.' }],
     });
     return { reply: textOf(final), toolsUsed, truncated: true };

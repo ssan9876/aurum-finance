@@ -95,8 +95,12 @@ export function startScheduler(service: DataService, backupDir: string) {
     );
   const tick = () => {
     void guard('automation', () => runDaily(service, backupDir));
-    void guard('bank sync', () => runNightlyBankSync(service));
-    void guard('weekly digest', () => runWeeklyDigest(service));
+    // The digest waits for the bank sync: on Sunday night both fire on the
+    // same tick, and the week's summary should include that night's pull.
+    void (async () => {
+      await guard('bank sync', () => runNightlyBankSync(service));
+      await guard('weekly digest', () => runWeeklyDigest(service));
+    })();
   };
   setTimeout(tick, 15_000); // shortly after boot
   setInterval(tick, 15 * 60 * 1000).unref(); // 15 min so the sync hour is hit closely

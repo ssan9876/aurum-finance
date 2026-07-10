@@ -10,6 +10,7 @@ import {
   ArrowRightLeft,
   BarChart3,
   CalendarDays,
+  FlaskConical,
   FolderTree,
   Gem,
   Keyboard,
@@ -79,6 +80,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     items: [
       { to: '/savings', label: 'Savings', icon: <PiggyBank /> },
       { to: '/goals', label: 'Goals', icon: <Target /> },
+      { to: '/what-if', label: 'What If', icon: <FlaskConical /> },
     ],
   },
   {

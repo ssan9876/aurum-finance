@@ -70,11 +70,14 @@ field per account (schema + both adapters + LOCAL_DEFAULTS parity!).
 Slider for extra monthly payment → payoff dates + interest saved per strategy.
 - `prisma/schema.prisma` (+ migration), `src/lib/debt.ts`, `src/pages/Debt.tsx`
 
-### 6. What-if sandbox
-Toggle subscriptions off / adjust contributions → live re-run of forecast,
-savings projections and health score. Pure composition of 1b + existing
-`savingsProjection`/`healthScore`.
-- `src/pages/WhatIf.tsx` (or a Dashboard drawer)
+### 6. What-if sandbox ✅ (v1.5.3)
+`simulateWhatIf()` — three levers that move the monthly net: cancel detected
+subscriptions, scale spending, scale income. Savings grows by the net each
+month (no interest assumed, so the projection never flatters itself). Page
+`/what-if` (nav: Planning) shows scenario-vs-baseline stat cards, a
+two-line projection chart and a before/after health score. Nothing is saved.
+Slider is a native range input — no new dependency.
+- `src/lib/whatif.ts` (pure), `src/pages/WhatIf.tsx`
 
 ## Phase 3 — AI features (need 1c)
 

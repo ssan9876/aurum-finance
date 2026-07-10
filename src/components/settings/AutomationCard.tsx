@@ -48,6 +48,12 @@ const TOGGLES = [
     label: 'Nightly bank sync',
     desc: 'Pull new bank transactions every night (when SimpleFIN is connected)',
   },
+  {
+    key: 'automation.weeklyDigest',
+    default: false,
+    label: 'Weekly digest',
+    desc: 'Post your week in review to the webhook below, Sunday evening',
+  },
 ] as const;
 
 export function AutomationCard() {

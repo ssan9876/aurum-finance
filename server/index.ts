@@ -21,6 +21,7 @@ import { simplefinConnect, simplefinDisconnect, simplefinStatus, simplefinSync }
 import { aiConnect, aiDisconnect, aiStatus, aiTest, friendlyError } from './ai';
 import { chat, type ChatMessage } from './chat';
 import { scanReceipt } from './receipt';
+import { WEBHOOK_SETTING, digestStatus, weeklyDigest } from './digest';
 import { startScheduler } from './scheduler';
 
 /**
@@ -40,7 +41,7 @@ function redactSettings(method: string, payload: any, result: unknown): unknown 
 
 const PORT = Number(process.env.PORT ?? 5533);
 const PASSWORD = process.env.AURUM_PASSWORD ?? '';
-const APP_VERSION = '1.9.0';
+const APP_VERSION = '1.10.0';
 
 // AURUM_DB wins over DATABASE_URL: Prisma's client auto-loads a project .env
 // at import time, which would otherwise silently override the service config.
@@ -136,6 +137,22 @@ app.post('/api/ai/test', requireKey, ai(() => aiTest(service)));
 app.post('/api/ai/chat', requireKey, ai((s, body) => chat(s, (body.messages ?? []) as ChatMessage[])));
 // Receipt photo -> transaction draft (see server/receipt.ts). Nothing is saved.
 app.post('/api/ai/receipt', requireKey, ai((s, body) => scanReceipt(s, String(body.image ?? ''))));
+
+// Weekly digest (see server/digest.ts). Sending is outward-facing, so `send`
+// only happens on an explicit request or the opt-in scheduler job.
+app.get('/api/digest/status', requireKey, ai(() => digestStatus(service)));
+app.get('/api/digest/preview', requireKey, ai(() => weeklyDigest(service, { send: false })));
+app.post('/api/digest/send', requireKey, ai(() => weeklyDigest(service, { send: true })));
+app.post(
+  '/api/digest/webhook',
+  requireKey,
+  ai(async (s, body) => {
+    const url = String(body.url ?? '').trim();
+    if (url && !/^https?:\/\//i.test(url)) throw new Error('Webhook URL must start with http:// or https://');
+    await s.handle('setSetting', { key: WEBHOOK_SETTING, value: url });
+    return { webhookUrl: url };
+  })
+);
 
 // MCP endpoint for AI assistants (Claude Desktop/Code, claude.ai connectors).
 // Same secret as /api/data; MCP clients usually send it as a Bearer token.

@@ -26,6 +26,7 @@ import type { DataService } from './data-service';
 import { advanceBillDate } from '../src/lib/finance';
 import type { Bill, IncomeSource, SavingsAccount, SavingsSnapshot, Setting } from '../src/shared/types';
 import { simplefinConfigured, simplefinSync } from './simplefin';
+import { LAST_SENT_SETTING, digestConfigured, weekKey, weeklyDigest } from './digest';
 
 const LAST_RUN_KEY = 'automation.lastRunDay';
 const LAST_BANK_SYNC_KEY = 'automation.lastBankSyncDay';
@@ -37,12 +38,25 @@ const BACKUPS_TO_KEEP = 14;
 /** Local calendar day — the sync hour is wall-clock, so day guards are too. */
 const localDay = (d: Date) => format(d, 'yyyy-MM-dd');
 
+/** The configured nightly hour (0–23), shared by bank sync and the digest. */
+function syncHourOf(settings: Setting[]): number {
+  try {
+    const raw = JSON.parse(settings.find((s) => s.key === SYNC_HOUR_KEY)?.value ?? '');
+    if (Number.isInteger(raw) && raw >= 0 && raw <= 23) return raw;
+  } catch {
+    /* fall through */
+  }
+  return DEFAULT_SYNC_HOUR;
+}
+
 export const AUTOMATION_FLAGS = {
   autoPayBills: { key: 'automation.autoPayBills', default: false },
   postIncome: { key: 'automation.postIncome', default: false },
   savingsSnapshots: { key: 'automation.savingsSnapshots', default: true },
   backups: { key: 'automation.backups', default: true },
   bankSync: { key: 'automation.bankSync', default: true },
+  // Sends data to an outside service, so it stays opt-in.
+  weeklyDigest: { key: 'automation.weeklyDigest', default: false },
 } as const;
 
 function flagEnabled(settings: Setting[], flag: { key: string; default: boolean }): boolean {
@@ -82,6 +96,7 @@ export function startScheduler(service: DataService, backupDir: string) {
   const tick = () => {
     void guard('automation', () => runDaily(service, backupDir));
     void guard('bank sync', () => runNightlyBankSync(service));
+    void guard('weekly digest', () => runWeeklyDigest(service));
   };
   setTimeout(tick, 15_000); // shortly after boot
   setInterval(tick, 15 * 60 * 1000).unref(); // 15 min so the sync hour is hit closely
@@ -101,13 +116,7 @@ export async function runNightlyBankSync(service: DataService, force = false) {
   const now = new Date();
   const today = localDay(now);
   const lastRun = settings.find((s) => s.key === LAST_BANK_SYNC_KEY)?.value ?? '';
-  let hour = DEFAULT_SYNC_HOUR;
-  try {
-    const raw = JSON.parse(settings.find((s) => s.key === SYNC_HOUR_KEY)?.value ?? '');
-    if (Number.isInteger(raw) && raw >= 0 && raw <= 23) hour = raw;
-  } catch {
-    /* default */
-  }
+  const hour = syncHourOf(settings);
 
   const missedYesterday = !!lastRun && lastRun < localDay(subDays(now, 1));
   const due = now.getHours() >= hour || missedYesterday || !lastRun;
@@ -120,6 +129,31 @@ export async function runNightlyBankSync(service: DataService, force = false) {
     `[aurum] nightly bank sync: ${result.created} new, ${result.duplicatesSkipped} duplicates, ` +
       `${result.transfersMerged} transfers merged`
   );
+  return result;
+}
+
+/**
+ * Weekly digest, sent Sunday evening — after that night's bank sync, so the
+ * week's transactions are in before we summarize them. Once per ISO week,
+ * claimed up front so a failing webhook can't re-send every 15 minutes.
+ */
+export async function runWeeklyDigest(service: DataService, force = false) {
+  const settings = (await service.handle('list', { entity: 'setting' })) as Setting[];
+  if (!force && !flagEnabled(settings, AUTOMATION_FLAGS.weeklyDigest)) return null;
+  if (!(await digestConfigured(service))) return null;
+
+  const now = new Date();
+  const thisWeek = weekKey(now);
+  if (!force) {
+    if (settings.find((s) => s.key === LAST_SENT_SETTING)?.value === thisWeek) return null;
+    const hour = syncHourOf(settings);
+    // Sunday, at or after the nightly hour.
+    if (now.getDay() !== 0 || now.getHours() < hour) return null;
+  }
+
+  await service.handle('setSetting', { key: LAST_SENT_SETTING, value: thisWeek });
+  const result = await weeklyDigest(service, { send: true, now });
+  console.log(`[aurum] weekly digest sent for ${thisWeek}`);
   return result;
 }
 

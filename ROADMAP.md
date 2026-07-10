@@ -122,12 +122,21 @@ TransactionDialog auto-scans on attach (new transactions only) and shows a
 rescan button; the scan only ever fills BLANK fields, never overwrites typing.
 - `server/receipt.ts`, `TransactionDialog.tsx`
 
-### 7. Weekly digest push
-Scheduler job (Sunday night): build a summary (top expenses, budget standing,
-streaks, anomalies from 2/8), optional AI-written paragraph, delivered via
-web push (PWA service worker exists) and/or ntfy webhook setting.
-- `server/scheduler.ts`, `server/digest.ts`, `sw.js` push handler,
-  Settings card for ntfy URL / push subscription
+### 7. Weekly digest ✅ (v1.10.0)
+`server/digest.ts` — week's spend/income/net, top expenses, over-budget
+categories, subscriptions renewing, anomaly + overdue-bill counts, safe-to-
+spend and the forecast warning. Every number comes from the SAME pure libs
+the UI uses, so the digest can't disagree with the app; Claude (if connected)
+only writes ONE opening sentence over those fixed numbers and is told never
+to state a figure not in the JSON. A narration failure drops the sentence,
+not the digest.
+Delivered as plain text POST to any webhook (ntfy/Discord/Slack/HA).
+Scheduler job runs Sunday at the same nightly hour as bank sync (so the
+week's transactions are in first), once per ISO week, claimed up front.
+**Outward-facing, so opt-in**: `automation.weeklyDigest` defaults OFF and
+nothing sends without a webhook URL.
+- `server/digest.ts`, `server/scheduler.ts`, `DigestCard.tsx`
+- Chose a webhook over web push: no VAPID keys, works with what people run.
 
 ## Phase 4 — Delight
 

@@ -23,10 +23,17 @@ events + `safeToSpend` (near-horizon trough, floored at 0) + `warnLabel`
 bills clamp overdue to today, income never clamps, recurring-tx projections
 skip merchants that match a bill/income name.
 
-### 1c. AI plumbing (server)
-`server/ai.ts`: thin Claude API client (plain fetch, no SDK dep), API key in
-setting `ai.apiKey`, model in `ai.model`. Settings card (server backend only).
-Endpoint `POST /api/ai/*` guarded by `requireKey`. Unlocks features 4–6.
+### 1c. AI plumbing (server) ✅ (v1.7.0)
+`server/ai.ts` — uses the official `@anthropic-ai/sdk` (not raw fetch: typed
+errors, and the tool runner that "Ask Aurum" will need). Key in setting
+`ai.apiKey`, model in `ai.model` (default `claude-opus-4-8`).
+`aiConnect()` verifies a key with a 16-token request BEFORE storing it.
+Exports `client()`, `complete()`, `textOf()`, `friendlyError()` for features
+1/4/7 to build on.
+**The key never leaves the server**: `/api/data` redacts `SENSITIVE_SETTING_KEYS`
+(`ai.apiKey`, `simplefin.accessUrl`) to `'__set__'` — the renderer learns only
+that a key is set. Endpoints `GET|POST /api/ai/{status,connect,disconnect,test}`
+behind `requireKey`. Settings → Claude card (server backend only).
 
 ## Phase 2 — Money intelligence (no AI required)
 

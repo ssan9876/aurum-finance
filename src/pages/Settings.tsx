@@ -29,6 +29,7 @@ import { ConfirmDialog, Field, PageHeader } from '@/components/shared';
 import { RulesCard } from '@/components/settings/RulesCard';
 import { BankSyncCard } from '@/components/settings/BankSyncCard';
 import { AutomationCard } from '@/components/settings/AutomationCard';
+import { AiCard } from '@/components/settings/AiCard';
 import { useSettings } from '@/state/settings';
 import { useAccounts, useCategories, useRefreshAll, useTransactions } from '@/data/hooks';
 import { api, backendMode } from '@/data/api';
@@ -248,11 +249,12 @@ export default function Settings() {
         {/* Auto-categorization rules */}
         <RulesCard />
 
-        {/* Server-only: bank sync + daily automation */}
+        {/* Server-only: bank sync, automation, Claude */}
         {backendMode === 'server' && (
           <>
             <BankSyncCard />
             <AutomationCard />
+            <AiCard />
           </>
         )}
 
@@ -328,7 +330,7 @@ export default function Settings() {
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground space-y-2">
             <p className="flex items-center gap-2">
-              Aurum <Badge variant="secondary">v1.6.0</Badge>
+              Aurum <Badge variant="secondary">v1.7.0</Badge>
               <Badge variant="outline">
                 {backendMode === 'desktop'
                   ? 'Desktop · SQLite'

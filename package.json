@@ -2,7 +2,7 @@
   "name": "aurum-finance",
   "productName": "Aurum",
   "description": "Aurum — local-first personal finance: budgets, bills, savings goals and analytics.",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "private": true,
   "type": "module",
   "main": "dist-electron/main.js",
@@ -22,6 +22,7 @@
     "preview:web": "vite preview --mode web"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.110.0",
     "@fontsource-variable/inter": "^5.1.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@prisma/client": "^5.22.0",

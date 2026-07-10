@@ -18,11 +18,27 @@ import crypto from 'node:crypto';
 import { DataService } from './data-service';
 import { createMcpHandler } from './mcp';
 import { simplefinConnect, simplefinDisconnect, simplefinStatus, simplefinSync } from './simplefin';
+import { aiConnect, aiDisconnect, aiStatus, aiTest, friendlyError } from './ai';
 import { startScheduler } from './scheduler';
+
+/**
+ * Settings whose values are credentials. The server reads them straight from
+ * the database; clients only ever learn whether one is set (via the /status
+ * endpoints), so the values are stripped from every /api/data response.
+ */
+const SENSITIVE_SETTING_KEYS = new Set(['ai.apiKey', 'simplefin.accessUrl']);
+
+/** Replace credential values with a presence marker before they cross the wire. */
+function redactSettings(method: string, payload: any, result: unknown): unknown {
+  if (method !== 'list' || payload?.entity !== 'setting' || !Array.isArray(result)) return result;
+  return result.map((row: any) =>
+    SENSITIVE_SETTING_KEYS.has(row?.key) ? { ...row, value: row.value ? '__set__' : '' } : row
+  );
+}
 
 const PORT = Number(process.env.PORT ?? 5533);
 const PASSWORD = process.env.AURUM_PASSWORD ?? '';
-const APP_VERSION = '1.6.0';
+const APP_VERSION = '1.7.0';
 
 // AURUM_DB wins over DATABASE_URL: Prisma's client auto-loads a project .env
 // at import time, which would otherwise silently override the service config.
@@ -73,7 +89,7 @@ app.post('/api/data', async (req, res) => {
   }
   try {
     const result = await service.handle(method, payload);
-    res.json({ result });
+    res.json({ result: redactSettings(method, payload, result) });
   } catch (err) {
     res.status(400).json({ error: err instanceof Error ? err.message : 'Request failed' });
   }
@@ -100,6 +116,20 @@ app.get('/api/simplefin/status', requireKey, sfin(() => simplefinStatus(service)
 app.post('/api/simplefin/connect', requireKey, sfin((s, body) => simplefinConnect(s, String(body.token ?? ''))));
 app.post('/api/simplefin/sync', requireKey, sfin((s, body) => simplefinSync(s, { full: !!body.full })));
 app.post('/api/simplefin/disconnect', requireKey, sfin(() => simplefinDisconnect(service)));
+
+// Claude API plumbing (see server/ai.ts). The key never leaves the server.
+const ai = (fn: (service: DataService, body: any) => Promise<unknown>) =>
+  async (req: express.Request, res: express.Response) => {
+    try {
+      res.json(await fn(service, req.body ?? {}));
+    } catch (err) {
+      res.status(400).json({ error: friendlyError(err) });
+    }
+  };
+app.get('/api/ai/status', requireKey, ai(() => aiStatus(service)));
+app.post('/api/ai/connect', requireKey, ai((s, body) => aiConnect(s, String(body.apiKey ?? ''), body.model)));
+app.post('/api/ai/disconnect', requireKey, ai(() => aiDisconnect(service)));
+app.post('/api/ai/test', requireKey, ai(() => aiTest(service)));
 
 // MCP endpoint for AI assistants (Claude Desktop/Code, claude.ai connectors).
 // Same secret as /api/data; MCP clients usually send it as a Bearer token.

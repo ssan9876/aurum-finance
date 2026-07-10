@@ -6,6 +6,7 @@ import * as React from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
+  AlertTriangle,
   ArrowDownUp,
   ArrowRightLeft,
   Copy,
@@ -79,6 +80,7 @@ import { RULES_KEY, applyRulesToDrafts, parseRules } from '@/lib/rules';
 import { applyKeywordsToDrafts } from '@/lib/keywords';
 import { applySavingsCategory } from '@/lib/savings-category';
 import { detectTransferPairs, mergedTransferFields, TRANSFER_TAG, type TransferPair } from '@/lib/transfers';
+import { detectAnomalies, REVIEWED_TAG, type Anomaly } from '@/lib/anomalies';
 import { countsAsTransfer } from '@/lib/finance';
 import { parseTags, serializeTags, type Account, type Category, type Setting, type Transaction } from '@/shared/types';
 import { PAYMENT_METHODS } from '@/shared/defaults';
@@ -95,12 +97,32 @@ export const PAID_BILL_TAG = 'Paid Bill';
 /** True when a row carries the reserved Transfer tag (a verified transfer leg). */
 const isTaggedTransfer = (t: Transaction) => parseTags(t.tags).includes(TRANSFER_TAG);
 
-/** Add/remove the reserved Transfer tag, preserving the row's other tags. */
-const withTransferTag = (t: Transaction, on: boolean): string => {
-  const tags = parseTags(t.tags).filter((x) => x !== TRANSFER_TAG);
-  if (on) tags.push(TRANSFER_TAG);
+/** Add/remove a reserved tag, preserving the row's other tags. */
+const withTag = (t: Transaction, tag: string, on: boolean): string => {
+  const tags = parseTags(t.tags).filter((x) => x !== tag);
+  if (on) tags.push(tag);
   return serializeTags(tags);
 };
+
+const withTransferTag = (t: Transaction, on: boolean) => withTag(t, TRANSFER_TAG, on);
+
+const ANOMALY_LABEL: Record<Anomaly['kind'], string> = {
+  duplicate: 'Possible double charge',
+  outlier: 'Unusually large',
+  'new-merchant': 'New merchant',
+};
+
+function anomalyDetail(a: Anomaly, fmtMoney: (n: number) => string): string {
+  if (a.kind === 'duplicate') {
+    return a.daysApart === 0
+      ? 'Charged twice on the same day'
+      : `Charged again ${a.daysApart} day${a.daysApart === 1 ? '' : 's'} later`;
+  }
+  if (a.kind === 'outlier') {
+    return `${a.ratio!.toFixed(1)}× this merchant's usual ${fmtMoney(a.typical!)}`;
+  }
+  return 'First charge from this merchant';
+}
 
 /**
  * Fill categories on import drafts: learned merchant rules first, then the
@@ -143,6 +165,11 @@ export default function Transactions() {
   const [reviewChecked, setReviewChecked] = React.useState<Set<number>>(new Set());
   const [reviewDismissed, setReviewDismissed] = React.useState(false);
   const [markingTransfers, setMarkingTransfers] = React.useState(false);
+  // Anomaly review (duplicate charges, outliers, big first-time merchants).
+  const [anomalyOpen, setAnomalyOpen] = React.useState(false);
+  const [anomalyChecked, setAnomalyChecked] = React.useState<Set<string>>(new Set());
+  const [anomalyDismissed, setAnomalyDismissed] = React.useState(false);
+  const [markingAnomalies, setMarkingAnomalies] = React.useState(false);
 
   /* --------------------------------- state -------------------------------- */
   const q = params.get('q') ?? '';
@@ -257,6 +284,14 @@ export default function Transactions() {
     [transactions]
   );
 
+  // Unusual recent charges. Rows already tagged `Reviewed` are skipped by the
+  // detector, so dismissing an alert makes it stay gone.
+  const anomalies = React.useMemo(() => detectAnomalies(transactions ?? []), [transactions]);
+  const txById = React.useMemo(
+    () => new Map((transactions ?? []).map((t) => [t.id, t])),
+    [transactions]
+  );
+
   /* ------------------------------- actions -------------------------------- */
   const toggleSort = (key: SortKey) =>
     setSort((s) => (s.key === key ? { key, dir: s.dir === 1 ? -1 : 1 } : { key, dir: -1 }));
@@ -322,6 +357,33 @@ export default function Transactions() {
     } finally {
       setMarkingTransfers(false);
       setReviewOpen(false);
+    }
+  }
+
+  /** Open the anomaly panel with every alert checked. */
+  function openAnomalyReview() {
+    setAnomalyChecked(new Set(anomalies.map((a) => a.id)));
+    setAnomalyOpen(true);
+  }
+
+  /** Tag the checked anomalies' rows as reviewed so they stop being flagged. */
+  async function applyAnomalyReview() {
+    setMarkingAnomalies(true);
+    try {
+      const picked = anomalies.filter((a) => anomalyChecked.has(a.id));
+      for (const a of picked) {
+        const row = txById.get(a.txId);
+        if (row) await api.update('transaction', row.id, { tags: withTag(row, REVIEWED_TAG, true) });
+      }
+      refreshAll();
+      toast.success(`Reviewed ${picked.length} charge${picked.length === 1 ? '' : 's'}`, {
+        description: 'They won’t be flagged again. The rows themselves are unchanged.',
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not mark these reviewed');
+    } finally {
+      setMarkingAnomalies(false);
+      setAnomalyOpen(false);
     }
   }
 
@@ -442,6 +504,27 @@ export default function Transactions() {
             Review
           </Button>
           <Button size="sm" variant="ghost" onClick={() => setReviewDismissed(true)}>
+            Dismiss
+          </Button>
+        </div>
+      )}
+
+      {/* Unusual charges awaiting review */}
+      {anomalies.length > 0 && !anomalyDismissed && (
+        <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-warning/40 bg-warning/5 px-4 py-3">
+          <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
+          <p className="text-sm flex-1 min-w-[12rem]">
+            <span className="font-medium">
+              {anomalies.length} unusual charge{anomalies.length === 1 ? '' : 's'} in the last 30 days
+            </span>
+            <span className="text-muted-foreground">
+              {' '}— possible double charges, unusually large amounts or big first-time merchants.
+            </span>
+          </p>
+          <Button size="sm" onClick={openAnomalyReview}>
+            Review
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setAnomalyDismissed(true)}>
             Dismiss
           </Button>
         </div>
@@ -853,6 +936,66 @@ export default function Transactions() {
               </Button>
               <Button onClick={applyReview} disabled={markingTransfers || reviewChecked.size === 0}>
                 {markingTransfers ? 'Marking…' : `Mark ${reviewChecked.size} as transfer${reviewChecked.size === 1 ? '' : 's'}`}
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Review unusual charges (tags them so they stop being flagged) */}
+      <Dialog open={anomalyOpen} onOpenChange={(o) => !markingAnomalies && setAnomalyOpen(o)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Unusual charges</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Worth a second look. Checked charges get marked reviewed and won’t be flagged again —
+            the transactions themselves aren’t changed.
+          </p>
+          <div className="max-h-[50vh] overflow-y-auto -mx-1 px-1 space-y-2">
+            {anomalies.map((a) => (
+              <label
+                key={a.id}
+                className="flex items-start gap-3 rounded-md border p-3 cursor-pointer hover:bg-muted/40"
+              >
+                <Checkbox
+                  className="mt-0.5"
+                  checked={anomalyChecked.has(a.id)}
+                  onCheckedChange={(v) =>
+                    setAnomalyChecked((prev) => {
+                      const next = new Set(prev);
+                      if (v) next.add(a.id);
+                      else next.delete(a.id);
+                      return next;
+                    })
+                  }
+                  aria-label={`Mark ${a.merchant} reviewed`}
+                />
+                <div className="min-w-0 flex-1 text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate font-medium">{a.merchant || '—'}</span>
+                    <Badge variant={a.severity === 'high' ? 'destructive' : 'warning'}>
+                      {ANOMALY_LABEL[a.kind]}
+                    </Badge>
+                    <span className="ml-auto tabular-nums shrink-0 font-medium">{fmtMoney(a.amount)}</span>
+                  </div>
+                  <div className="text-xs text-muted-foreground truncate">
+                    {fmtDate(a.date)} · {anomalyDetail(a, fmtMoney)}
+                  </div>
+                </div>
+              </label>
+            ))}
+          </div>
+          <DialogFooter className="gap-2 sm:justify-between">
+            <span className="text-xs text-muted-foreground self-center">
+              {anomalyChecked.size} of {anomalies.length} selected
+            </span>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setAnomalyOpen(false)} disabled={markingAnomalies}>
+                Cancel
+              </Button>
+              <Button onClick={applyAnomalyReview} disabled={markingAnomalies || anomalyChecked.size === 0}>
+                {markingAnomalies ? 'Saving…' : `Mark ${anomalyChecked.size} reviewed`}
               </Button>
             </div>
           </DialogFooter>

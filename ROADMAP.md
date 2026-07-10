@@ -46,10 +46,13 @@ hikes (walk back over the trailing run of the current price).
 overlap. Page `/subscriptions` (nav: Money).
 - `src/lib/subscriptions.ts` (pure), `src/pages/Subscriptions.tsx`
 
-### 8. Anomaly alerts
-Per-merchant/category stats; flag outlier amounts, probable double-charges
-(same merchant+amount within days), first-seen merchants over a threshold.
-Banner on Transactions (reuse transfer-review UI), dismiss = reserved tag.
+### 8. Anomaly alerts ✅ (v1.5.1)
+`detectAnomalies(txs, {lookbackDays=30})` — three signals, one per tx
+(duplicate > outlier > new-merchant): same merchant+amount ≤2 days apart
+(≥$10); a charge ≥2.5× and ≥$25 over the median of that merchant's own
+history (≥4 prior charges); a first-ever charge ≥$100. Warning banner +
+checkbox review dialog on Transactions; "Mark reviewed" writes the reserved
+`Reviewed` tag, which the detector skips — so dismissals persist.
 - `src/lib/anomalies.ts` (pure), `Transactions.tsx`
 
 ### 9. Merchant profiles

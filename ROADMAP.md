@@ -95,12 +95,21 @@ Slider is a native range input — no new dependency.
 
 ## Phase 3 — AI features (need 1c)
 
-### 1. "Ask Aurum" chat panel
-In-app chat calling Claude with the existing MCP tools (`server/mcp.ts`
-already defines get_overview, add_transactions, set_budgets, …). Server
-proxies the Claude API and executes tool calls against DataService — the
-renderer never sees the API key. Streaming optional in v1.
-- `server/ai.ts`, `src/components/chat/`, entry in AppShell
+### 1. "Ask Aurum" chat panel ✅ (v1.8.0)
+`server/chat.ts` drives the EXISTING MCP server in-process over
+`InMemoryTransport` — one tool definition, two consumers (external MCP
+clients via POST /mcp, and this chat). **READ-ONLY**: only tools the MCP
+server annotates `readOnlyHint` are offered to the model (`get_overview`,
+`list_transactions`); the 11 mutating tools are withheld, so a stray tool
+call can't touch the user's records. Hand-written agentic loop capped at
+`MAX_STEPS = 8` (then one tools-free "answer now" call), history bounded to
+20 turns; returns `toolsUsed` for UI provenance badges.
+`POST /api/ai/chat` behind `requireKey`. Sheet panel in the topbar, hidden
+unless backend is `server` AND a key is configured.
+- `server/chat.ts`, `src/components/chat/AskAurum.tsx`
+
+**Next:** writes need their own confirmation flow before the mutating tools
+can be exposed here.
 
 ### 4. Receipt scanning
 Photo/upload → Claude vision extracts merchant/amount/date/line items →

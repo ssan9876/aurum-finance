@@ -48,6 +48,7 @@ import { IncomeDialog } from '@/components/forms/IncomeDialog';
 import { CommandPalette } from '@/components/layout/CommandPalette';
 import { ShortcutsDialog } from '@/components/layout/ShortcutsDialog';
 import { Onboarding } from '@/components/layout/Onboarding';
+import { AskAurum } from '@/components/chat/AskAurum';
 import { useAccounts, useBills, useBudgets, useCategories, useTransactions } from '@/data/hooks';
 import { billState, budgetStatuses } from '@/lib/finance';
 
@@ -326,6 +327,7 @@ export function AppShell() {
           </button>
 
           <div className="ml-auto flex items-center gap-1.5">
+            <AskAurum />
             <SimpleTooltip label="Add income (I)">
               <Button variant="ghost" size="icon" onClick={() => ui.setQuickIncomeOpen(true)} aria-label="Add income">
                 <TrendingUp />

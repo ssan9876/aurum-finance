@@ -65,6 +65,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
       { to: '/', label: 'Dashboard', icon: <LayoutDashboard /> },
       { to: '/calendar', label: 'Calendar', icon: <CalendarDays /> },
       { to: '/analytics', label: 'Analytics', icon: <BarChart3 /> },
+      { to: '/wrapped', label: 'Wrapped', icon: <Gem /> },
     ],
   },
   {

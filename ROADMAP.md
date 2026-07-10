@@ -140,10 +140,20 @@ nothing sends without a webhook URL.
 
 ## Phase 4 — Delight
 
-### 10. "Aurum Wrapped" year in review
-Animated recap (framer-motion already a dep): top merchants, best month,
-no-spend streaks, savings growth. Route `/wrapped`, teased from the
-dashboard in December.
+### 10. "Aurum Wrapped" year in review ✅ (v1.11.0)
+`yearInReview(txs, categories, year)` (src/lib/wrapped.ts, pure) — spend,
+income, net, top merchants, top category, priciest/leanest month, biggest
+purchase, no-spend days + longest streak, months in the black. Excludes
+transfers, clamps an in-progress year to today, returns `null` for a year
+with no activity (a deck of zeroes reads as a bug). `yearsWithData()` drives
+the year picker. Route `/wrapped` (nav: Overview), framer-motion slide deck
+with keyboard arrows and progress dots.
+- `src/lib/wrapped.ts`, `src/pages/Wrapped.tsx`
+
+---
+
+**Phases 1–4 complete.** Remaining ideas: a confirmation flow so Ask Aurum can
+use the mutating MCP tools; web push as a digest channel alongside webhooks.
 
 ## Deliberately deferred
 - Multi-user / partner mode (big auth + data-model lift)

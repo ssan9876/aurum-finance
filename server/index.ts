@@ -41,7 +41,7 @@ function redactSettings(method: string, payload: any, result: unknown): unknown 
 
 const PORT = Number(process.env.PORT ?? 5533);
 const PASSWORD = process.env.AURUM_PASSWORD ?? '';
-const APP_VERSION = '1.10.0';
+const APP_VERSION = '1.11.0';
 
 // AURUM_DB wins over DATABASE_URL: Prisma's client auto-loads a project .env
 // at import time, which would otherwise silently override the service config.

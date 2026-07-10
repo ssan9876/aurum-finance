@@ -22,7 +22,7 @@ import { startScheduler } from './scheduler';
 
 const PORT = Number(process.env.PORT ?? 5533);
 const PASSWORD = process.env.AURUM_PASSWORD ?? '';
-const APP_VERSION = '1.4.2';
+const APP_VERSION = '1.5.0';
 
 // AURUM_DB wins over DATABASE_URL: Prisma's client auto-loads a project .env
 // at import time, which would otherwise silently override the service config.

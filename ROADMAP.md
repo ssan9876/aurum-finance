@@ -36,10 +36,14 @@ Dashboard "Cash Flow Forecast" card: `ForecastChart` (area, dashed zero line,
 number and a "Below $0 by <date>" / "Low: <amount>" readout. Consumes 1b.
 - `src/lib/forecast.ts`, `Dashboard.tsx`, `ForecastChart` in `charts.tsx`
 
-### 3. Subscription Detective
-Detect recurring same-merchant charges (amount tolerance + period inference),
-price hikes, duplicates/overlaps, upcoming annual renewals (surface on the
-Calendar). New page `/subscriptions` + review-banner pattern from transfers.
+### 3. Subscription Detective ✅ (v1.5.0)
+`detectSubscriptions(txs)` groups expenses by normalized merchant and keeps
+series where BOTH timing (median gap → cadence window, ≥60% of gaps agree)
+and amount (spread ≤50% of median) are consistent — so weekly groceries
+don't register. Infers cadence, monthly/yearly cost, next charge, and price
+hikes (walk back over the trailing run of the current price).
+`summarizeSubscriptions()` adds renewing-soon, price hikes and per-category
+overlap. Page `/subscriptions` (nav: Money).
 - `src/lib/subscriptions.ts` (pure), `src/pages/Subscriptions.tsx`
 
 ### 8. Anomaly alerts

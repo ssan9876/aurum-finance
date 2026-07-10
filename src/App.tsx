@@ -7,6 +7,7 @@ import Income from '@/pages/Income';
 import Budgets from '@/pages/Budgets';
 import Bills from '@/pages/Bills';
 import Subscriptions from '@/pages/Subscriptions';
+import Merchant from '@/pages/Merchant';
 import Savings from '@/pages/Savings';
 import Goals from '@/pages/Goals';
 import Accounts from '@/pages/Accounts';
@@ -26,6 +27,7 @@ export default function App() {
           <Route path="/budgets" element={<Budgets />} />
           <Route path="/bills" element={<Bills />} />
           <Route path="/subscriptions" element={<Subscriptions />} />
+          <Route path="/merchants/:key" element={<Merchant />} />
           <Route path="/savings" element={<Savings />} />
           <Route path="/goals" element={<Goals />} />
           <Route path="/accounts" element={<Accounts />} />

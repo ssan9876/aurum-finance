@@ -55,10 +55,14 @@ checkbox review dialog on Transactions; "Mark reviewed" writes the reserved
 `Reviewed` tag, which the detector skips — so dismissals persist.
 - `src/lib/anomalies.ts` (pure), `Transactions.tsx`
 
-### 9. Merchant profiles
-Click a merchant anywhere → `/merchants/:name`: lifetime spend, average
-ticket, frequency, sparkline, category history. Pure memos over existing data.
-- `src/pages/Merchant.tsx`, links from Transactions/Analytics
+### 9. Merchant profiles ✅ (v1.5.2)
+`merchantProfile(txs, key)` — lifetime spend, average/min/max ticket, median
+gap between visits, 12-month spend series, category history, full charge
+list. Merchants aren't an entity; the key is the normalized merchant string
+(same one the rules use), so lookup is case-insensitive. Route
+`/merchants/:key`. Drill in from Analytics → Top Merchants (BarList gained an
+optional `onSelect`) and from Subscriptions service names.
+- `src/lib/merchants.ts` (pure), `src/pages/Merchant.tsx`
 
 ### 5. Debt payoff planner
 Avalanche vs. snowball simulator over `loan`/`credit` accounts. Needs an APR

@@ -464,9 +464,12 @@ export function CategoryDonut({
 export function BarList({
   data,
   className,
+  onSelect,
 }: {
   data: { name: string; value: number; color?: string; sub?: string }[];
   className?: string;
+  /** When set, each row's name becomes a button that drills in. */
+  onSelect?: (item: { name: string }) => void;
 }) {
   const { fmtMoney } = useSettings();
   const c = useChartColors();
@@ -476,7 +479,18 @@ export function BarList({
       {data.map((d, i) => (
         <div key={d.name + i}>
           <div className="flex items-center justify-between text-sm mb-1 gap-2">
-            <span className="truncate">{d.name}</span>
+            {onSelect ? (
+              <button
+                type="button"
+                onClick={() => onSelect(d)}
+                className="truncate text-left hover:text-primary hover:underline cursor-pointer"
+                title={`View ${d.name}`}
+              >
+                {d.name}
+              </button>
+            ) : (
+              <span className="truncate">{d.name}</span>
+            )}
             <span className="tabular-nums text-muted-foreground shrink-0">
               {fmtMoney(d.value, { compact: true })}
               {d.sub && <span className="text-xs">{d.sub}</span>}

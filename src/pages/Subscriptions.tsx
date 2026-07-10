@@ -158,7 +158,7 @@ export default function Subscriptions() {
                 <TableRow key={s.key}>
                   <TableCell>
                     <Link
-                      to={`/transactions?q=${encodeURIComponent(s.merchant)}`}
+                      to={`/merchants/${encodeURIComponent(s.key)}`}
                       className="font-medium hover:text-primary hover:underline"
                     >
                       {s.merchant}

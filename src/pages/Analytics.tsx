@@ -99,6 +99,8 @@ export default function Analytics() {
     if (!slice.id) return;
     navigate(`/transactions?category=${slice.id === '__none__' ? 'uncategorized' : slice.id}`);
   };
+  const openMerchant = (item: { name: string }) =>
+    navigate(`/merchants/${encodeURIComponent(item.name)}`);
   const { data: transactions, isLoading } = useTransactions();
   const { data: categories = [] } = useCategories();
   const { data: accounts = [] } = useAccounts();
@@ -310,7 +312,10 @@ export default function Analytics() {
                 {merchants.length === 0 ? (
                   <EmptyState icon={<Landmark />} title="No merchants in this period" className="py-8" />
                 ) : (
-                  <BarList data={merchants.map((m) => ({ name: m.merchant, value: m.amount, sub: `${m.count}×` }))} />
+                  <BarList
+                    data={merchants.map((m) => ({ name: m.merchant, value: m.amount, sub: `${m.count}×` }))}
+                    onSelect={openMerchant}
+                  />
                 )}
               </CardContent>
             </Card>

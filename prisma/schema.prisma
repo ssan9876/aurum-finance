@@ -24,6 +24,8 @@ model Account {
   name         String
   type         String        @default("checking") // checking | savings | credit | cash | investment
   startBalance Float         @default(0)
+  apr          Float? // annual interest rate % — credit cards & loans
+  minPayment   Float? // minimum monthly payment — credit cards & loans
   color        String?
   icon         String?
   archived     Boolean       @default(false)

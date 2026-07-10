@@ -25,6 +25,10 @@ export interface Account {
   name: string;
   type: AccountType;
   startBalance: number;
+  /** Annual interest rate %, for credit cards and loans. */
+  apr?: number | null;
+  /** Minimum monthly payment, for credit cards and loans. */
+  minPayment?: number | null;
   color?: string | null;
   icon?: string | null;
   archived: boolean;

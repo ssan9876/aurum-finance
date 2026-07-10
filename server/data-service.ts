@@ -29,6 +29,7 @@ const MONEY_FIELDS = new Set([
   'monthlyContribution',
   'targetAmount',
   'currentAmount',
+  'minPayment',
 ]);
 
 /** Deletion order that respects foreign keys (children first). */

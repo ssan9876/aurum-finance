@@ -14,6 +14,7 @@ import {
   FolderTree,
   Gem,
   Keyboard,
+  Landmark,
   LayoutDashboard,
   Menu,
   Moon,
@@ -80,6 +81,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     items: [
       { to: '/savings', label: 'Savings', icon: <PiggyBank /> },
       { to: '/goals', label: 'Goals', icon: <Target /> },
+      { to: '/debt', label: 'Debt Payoff', icon: <Landmark /> },
       { to: '/what-if', label: 'What If', icon: <FlaskConical /> },
     ],
   },

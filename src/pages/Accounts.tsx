@@ -244,14 +244,21 @@ function AccountEditor({
   const [name, setName] = React.useState('');
   const [type, setType] = React.useState<AccountType>('checking');
   const [startBalance, setStartBalance] = React.useState<number | ''>('');
+  const [apr, setApr] = React.useState<number | ''>('');
+  const [minPayment, setMinPayment] = React.useState<number | ''>('');
   const [icon, setIcon] = React.useState('wallet');
   const [color, setColor] = React.useState('#2a78d6');
+
+  // Only credit cards and loans carry interest, so only they ask for it.
+  const owesInterest = type === 'credit' || type === 'loan';
 
   React.useEffect(() => {
     if (!open) return;
     setName(account?.name ?? '');
     setType(account?.type ?? 'checking');
     setStartBalance(account?.startBalance ?? '');
+    setApr(account?.apr ?? '');
+    setMinPayment(account?.minPayment ?? '');
     setIcon(account?.icon ?? 'wallet');
     setColor(account?.color ?? '#2a78d6');
   }, [open, account]);
@@ -265,6 +272,9 @@ function AccountEditor({
       name: name.trim(),
       type,
       startBalance: startBalance === '' ? 0 : startBalance,
+      // Clear the debt fields when the account isn't a debt any more.
+      apr: owesInterest && apr !== '' ? apr : null,
+      minPayment: owesInterest && minPayment !== '' ? minPayment : null,
       icon,
       color,
     };
@@ -311,6 +321,32 @@ function AccountEditor({
               <MoneyInput value={startBalance} onChange={setStartBalance} />
             </Field>
           </div>
+          {owesInterest && (
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="APR" hint="Annual interest rate">
+                <div className="relative">
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.01"
+                    min="0"
+                    max="100"
+                    className="pr-8 tabular-nums"
+                    value={apr}
+                    onChange={(e) => setApr(e.target.value === '' ? '' : Number(e.target.value))}
+                    placeholder="e.g. 24.99"
+                    aria-label="Annual percentage rate"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none">
+                    %
+                  </span>
+                </div>
+              </Field>
+              <Field label="Minimum payment" hint="Per month — used by the payoff planner">
+                <MoneyInput value={minPayment} onChange={setMinPayment} />
+              </Field>
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>

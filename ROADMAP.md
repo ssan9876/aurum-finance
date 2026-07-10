@@ -64,11 +64,18 @@ list. Merchants aren't an entity; the key is the normalized merchant string
 optional `onSelect`) and from Subscriptions service names.
 - `src/lib/merchants.ts` (pure), `src/pages/Merchant.tsx`
 
-### 5. Debt payoff planner
-Avalanche vs. snowball simulator over `loan`/`credit` accounts. Needs an APR
-field per account (schema + both adapters + LOCAL_DEFAULTS parity!).
-Slider for extra monthly payment → payoff dates + interest saved per strategy.
-- `prisma/schema.prisma` (+ migration), `src/lib/debt.ts`, `src/pages/Debt.tsx`
+### 5. Debt payoff planner ✅ (v1.6.0)
+`simulatePayoff(debts, strategy, {extraMonthly})` + `comparePayoff()`.
+Avalanche (highest APR) vs snowball (smallest balance) over the SAME fixed
+budget (sum of minimums + extra); a cleared debt's minimum rolls into the
+next target. Interest accrues before payments land. Bails out with
+`months: null` when the budget can't outpace the interest.
+Schema: `Account.apr` + `Account.minPayment` (both nullable) — mirrored in
+`shared/types`, `LOCAL_DEFAULTS`, and BOTH `MONEY_FIELDS` sets (minPayment
+only; apr is a rate). Missing minimum falls back to 2% of balance, min $25.
+- `prisma/schema.prisma`, `src/lib/debt.ts` (pure), `src/pages/Debt.tsx`
+
+**Phase 2 complete.**
 
 ### 6. What-if sandbox ✅ (v1.5.3)
 `simulateWhatIf()` — three levers that move the monthly net: cancel detected

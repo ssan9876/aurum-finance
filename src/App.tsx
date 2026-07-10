@@ -9,6 +9,7 @@ import Bills from '@/pages/Bills';
 import Subscriptions from '@/pages/Subscriptions';
 import Merchant from '@/pages/Merchant';
 import WhatIf from '@/pages/WhatIf';
+import Debt from '@/pages/Debt';
 import Savings from '@/pages/Savings';
 import Goals from '@/pages/Goals';
 import Accounts from '@/pages/Accounts';
@@ -30,6 +31,7 @@ export default function App() {
           <Route path="/subscriptions" element={<Subscriptions />} />
           <Route path="/merchants/:key" element={<Merchant />} />
           <Route path="/what-if" element={<WhatIf />} />
+          <Route path="/debt" element={<Debt />} />
           <Route path="/savings" element={<Savings />} />
           <Route path="/goals" element={<Goals />} />
           <Route path="/accounts" element={<Accounts />} />

@@ -188,6 +188,100 @@ export function spendByCategory(
   return list.sort((a, b) => b.amount - a.amount);
 }
 
+/* ------------------------------- money flow ------------------------------- */
+
+export interface FlowNode {
+  name: string;
+  kind: 'source' | 'income' | 'expense' | 'saved';
+  /** Set for real categories (and '__none__' for uncategorized) — enables drill-down. */
+  categoryId?: string;
+  color?: string;
+}
+
+export interface FlowData {
+  nodes: FlowNode[];
+  links: { source: number; target: number; value: number }[];
+  totalIncome: number;
+  totalExpense: number;
+}
+
+/**
+ * Monarch-style cash-flow sankey: income sources → Income → spending
+ * categories, with the surplus (if any) flowing to a "Saved" node. Categories
+ * beyond `maxCategories` fold into "Other". Returns null for an empty period.
+ */
+export function cashFlowSankey(
+  txs: Transaction[],
+  categories: Category[],
+  from: Date,
+  to: Date,
+  maxCategories = 8
+): FlowData | null {
+  const byId = new Map(categories.map((c) => [c.id, c]));
+
+  const sources = new Map<string, FlowNode & { amount: number }>();
+  let totalIncome = 0;
+  for (const t of incomeIn(txs, from, to)) {
+    const root = rootCategoryOf(t.categoryId, byId);
+    const known = root && root.type === 'income';
+    const key = known ? root.id : '__other_income__';
+    const cur =
+      sources.get(key) ??
+      ({
+        name: known ? root.name : 'Other income',
+        kind: 'source',
+        categoryId: known ? root.id : undefined,
+        color: known ? root.color : undefined,
+        amount: 0,
+      } as FlowNode & { amount: number });
+    cur.amount += t.amount;
+    sources.set(key, cur);
+    totalIncome += t.amount;
+  }
+
+  const spend = spendByCategory(txs, categories, from, to);
+  const totalExpense = round2(sum(spend.map((s) => s.amount)));
+  if (totalIncome <= 0 && spend.length === 0) return null;
+
+  const top = spend.slice(0, maxCategories);
+  const restAmount = round2(sum(spend.slice(maxCategories).map((s) => s.amount)));
+
+  const nodes: FlowNode[] = [];
+  const links: FlowData['links'] = [];
+
+  for (const s of [...sources.values()].sort((a, b) => b.amount - a.amount)) {
+    nodes.push({ name: s.name, kind: 'source', categoryId: s.categoryId, color: s.color });
+    links.push({ source: nodes.length - 1, target: -1, value: round2(s.amount) });
+  }
+  const incomeIdx = nodes.length;
+  nodes.push({ name: 'Income', kind: 'income' });
+  for (const l of links) l.target = incomeIdx;
+
+  for (const s of top) {
+    nodes.push({
+      name: s.category.name,
+      kind: 'expense',
+      categoryId: s.category.id,
+      color: s.category.color,
+    });
+    links.push({ source: incomeIdx, target: nodes.length - 1, value: round2(s.amount) });
+  }
+  if (restAmount > 0) {
+    nodes.push({ name: 'Other', kind: 'expense' });
+    links.push({ source: incomeIdx, target: nodes.length - 1, value: restAmount });
+  }
+  const saved = round2(totalIncome - totalExpense);
+  if (saved > 0) {
+    nodes.push({ name: 'Saved', kind: 'saved' });
+    links.push({ source: incomeIdx, target: nodes.length - 1, value: saved });
+  }
+
+  // Sankey layout cannot place zero/negative links.
+  const positive = links.filter((l) => l.value > 0);
+  if (positive.length === 0) return null;
+  return { nodes, links: positive, totalIncome: round2(totalIncome), totalExpense };
+}
+
 /* -------------------------------- budgets -------------------------------- */
 
 /** Effective budget for a category+slot: specific row wins over template. */

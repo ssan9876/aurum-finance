@@ -11,29 +11,29 @@
 */
 @layer base {
   :root {
-    --background: 40 20% 98%;
-    --foreground: 240 10% 6%;
-    --card: 0 0% 100%;
-    --card-foreground: 240 10% 6%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 6%;
-    --secondary: 240 5% 95%;
-    --secondary-foreground: 240 6% 10%;
-    --muted: 240 5% 95%;
-    --muted-foreground: 240 4% 42%;
-    --accent: 240 5% 94%;
-    --accent-foreground: 240 6% 10%;
+    --background: 40 30% 97%;
+    --foreground: 30 12% 9%;
+    --card: 42 40% 99%;
+    --card-foreground: 30 12% 9%;
+    --popover: 42 40% 99%;
+    --popover-foreground: 30 12% 9%;
+    --secondary: 38 18% 93%;
+    --secondary-foreground: 30 10% 12%;
+    --muted: 38 18% 93%;
+    --muted-foreground: 30 7% 40%;
+    --accent: 38 20% 91%;
+    --accent-foreground: 30 10% 12%;
     --destructive: 0 72% 45%;
     --destructive-foreground: 0 0% 100%;
     --success: 142 72% 26%;
     --success-foreground: 0 0% 100%;
     --warning: 32 95% 38%;
     --warning-foreground: 0 0% 100%;
-    --border: 240 6% 89%;
-    --input: 240 6% 85%;
+    --border: 36 14% 86%;
+    --input: 36 14% 82%;
     --radius: 0.625rem;
-    --sidebar: 240 8% 97%;
-    --sidebar-foreground: 240 10% 6%;
+    --sidebar: 40 26% 95%;
+    --sidebar-foreground: 30 12% 9%;
 
     /* Categorical chart series (light surface) */
     --chart-1: #2a78d6;
@@ -51,28 +51,28 @@
   }
 
   .dark {
-    --background: 240 8% 5%;
-    --foreground: 0 0% 98%;
-    --card: 240 6% 8%;
-    --card-foreground: 0 0% 98%;
-    --popover: 240 6% 8%;
-    --popover-foreground: 0 0% 98%;
-    --secondary: 240 5% 13%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 5% 13%;
-    --muted-foreground: 240 5% 62%;
-    --accent: 240 5% 14%;
-    --accent-foreground: 0 0% 98%;
+    --background: 30 12% 7%;
+    --foreground: 40 20% 96%;
+    --card: 30 10% 10%;
+    --card-foreground: 40 20% 96%;
+    --popover: 30 10% 10%;
+    --popover-foreground: 40 20% 96%;
+    --secondary: 30 8% 15%;
+    --secondary-foreground: 40 20% 96%;
+    --muted: 30 8% 15%;
+    --muted-foreground: 34 8% 62%;
+    --accent: 30 8% 16%;
+    --accent-foreground: 40 20% 96%;
     --destructive: 0 72% 58%;
     --destructive-foreground: 0 0% 100%;
     --success: 142 60% 45%;
-    --success-foreground: 240 10% 6%;
+    --success-foreground: 30 12% 7%;
     --warning: 38 92% 55%;
-    --warning-foreground: 240 10% 6%;
-    --border: 240 5% 16%;
-    --input: 240 5% 20%;
-    --sidebar: 240 7% 7%;
-    --sidebar-foreground: 0 0% 98%;
+    --warning-foreground: 30 12% 7%;
+    --border: 30 8% 18%;
+    --input: 30 8% 22%;
+    --sidebar: 28 12% 8%;
+    --sidebar-foreground: 40 20% 96%;
 
     /* Same hues, re-stepped for the dark surface */
     --chart-1: #3987e5;
@@ -83,7 +83,7 @@
     --chart-6: #e66767;
     --chart-7: #d55181;
     --chart-8: #d95926;
-    --chart-grid: #26262a;
+    --chart-grid: #2b2823;
     --chart-axis: #898781;
     --chart-positive: #34c98e;
     --chart-negative: #e66767;
@@ -124,32 +124,32 @@
   :root.dark,
   :root.dark[data-accent='indigo'] {
     --primary: 240 84% 67%;
-    --primary-foreground: 240 10% 6%;
+    --primary-foreground: 30 12% 7%;
     --ring: 240 84% 67%;
   }
   :root.dark[data-accent='violet'] {
     --primary: 262 83% 68%;
-    --primary-foreground: 240 10% 6%;
+    --primary-foreground: 30 12% 7%;
     --ring: 262 83% 68%;
   }
   :root.dark[data-accent='blue'] {
     --primary: 212 92% 62%;
-    --primary-foreground: 240 10% 6%;
+    --primary-foreground: 30 12% 7%;
     --ring: 212 92% 62%;
   }
   :root.dark[data-accent='emerald'] {
     --primary: 158 64% 48%;
-    --primary-foreground: 240 10% 6%;
+    --primary-foreground: 30 12% 7%;
     --ring: 158 64% 48%;
   }
   :root.dark[data-accent='rose'] {
     --primary: 350 89% 66%;
-    --primary-foreground: 240 10% 6%;
+    --primary-foreground: 30 12% 7%;
     --ring: 350 89% 66%;
   }
   :root.dark[data-accent='amber'] {
     --primary: 38 92% 58%;
-    --primary-foreground: 240 10% 6%;
+    --primary-foreground: 30 12% 7%;
     --ring: 38 92% 58%;
   }
 

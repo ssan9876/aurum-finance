@@ -332,7 +332,7 @@ export default function Settings() {
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground space-y-2">
             <p className="flex items-center gap-2">
-              Aurum <Badge variant="secondary">v1.11.0</Badge>
+              Aurum <Badge variant="secondary">v1.12.0</Badge>
               <Badge variant="outline">
                 {backendMode === 'desktop'
                   ? 'Desktop · SQLite'

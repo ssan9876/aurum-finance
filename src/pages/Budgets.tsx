@@ -3,7 +3,8 @@
  * recurring templates and per-month overrides.
  */
 import * as React from 'react';
-import { addMonths, format, isSameMonth, subMonths } from 'date-fns';
+import { useNavigate } from 'react-router-dom';
+import { addMonths, endOfMonth, format, isSameMonth, startOfMonth, subMonths } from 'date-fns';
 import { toast } from 'sonner';
 import { CheckCircle2, ChevronLeft, ChevronRight, Pencil, Plus, Trash2, WalletCards } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
@@ -35,8 +36,16 @@ export default function Budgets() {
   const { data: categories = [] } = useCategories();
   const { data: transactions = [] } = useTransactions();
   const refreshAll = useRefreshAll();
+  const navigate = useNavigate();
 
   const [month, setMonth] = React.useState(() => new Date());
+
+  /** Jump to Transactions pre-filtered to this category and the viewed month. */
+  const openTransactions = (categoryId: string) => {
+    const from = format(startOfMonth(month), 'yyyy-MM-dd');
+    const to = format(endOfMonth(month), 'yyyy-MM-dd');
+    navigate(`/transactions?category=${categoryId}&from=${from}&to=${to}`);
+  };
   const [editorCat, setEditorCat] = React.useState<Category | null>(null);
   const [addOpen, setAddOpen] = React.useState(false);
 
@@ -125,7 +134,20 @@ export default function Budgets() {
             const over = s.pct > 1;
             const warn = !over && s.pct > 0.9;
             return (
-              <Card key={s.category.id}>
+              <Card
+                key={s.category.id}
+                role="link"
+                tabIndex={0}
+                aria-label={`View ${s.category.name} transactions for ${format(month, 'MMMM yyyy')}`}
+                className="cursor-pointer transition-colors hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                onClick={() => openTransactions(s.category.id)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    openTransactions(s.category.id);
+                  }
+                }}
+              >
                 <CardContent className="pt-5">
                   <div className="flex items-center gap-3 mb-3">
                     <span
@@ -145,7 +167,15 @@ export default function Budgets() {
                         {s.remaining >= 0 && ` · ${fmtMoney(s.remaining)} left`}
                       </p>
                     </div>
-                    <Button variant="ghost" size="icon-sm" onClick={() => setEditorCat(s.category)} aria-label={`Edit budget for ${s.category.name}`}>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditorCat(s.category);
+                      }}
+                      aria-label={`Edit budget for ${s.category.name}`}
+                    >
                       <Pencil />
                     </Button>
                   </div>

@@ -32,6 +32,7 @@ import { CategoryChip, EmptyState, PageHeader, StatCard } from '@/components/sha
 import {
   BarList,
   CashFlowChart,
+  CashFlowSankeyChart,
   CategoryDonut,
   IncomeExpenseChart,
   MultiLineChart,
@@ -49,6 +50,7 @@ import {
 } from '@/data/hooks';
 import {
   budgetStatuses,
+  cashFlowSankey,
   dailySpendMap,
   expensesIn,
   incomeIn,
@@ -58,6 +60,7 @@ import {
   savingsHistorySeries,
   spendByCategory,
   topMerchants,
+  type FlowNode,
 } from '@/lib/finance';
 import { buildTxRows, exportReportCsv, exportReportXlsx } from '@/lib/csv';
 import { round2, sum } from '@/lib/utils';
@@ -142,6 +145,14 @@ export default function Analytics() {
     label: p.label,
     balance: p.balance,
   }));
+  const flow = cashFlowSankey(transactions, categories, from, to);
+  const openFlowNode = (n: FlowNode) => {
+    if (!n.categoryId) return;
+    const cat = n.categoryId === '__none__' ? 'uncategorized' : n.categoryId;
+    navigate(
+      `/transactions?category=${cat}&from=${format(from, 'yyyy-MM-dd')}&to=${format(to, 'yyyy-MM-dd')}`
+    );
+  };
   const merchants = topMerchants(transactions, from, to, 8);
   const largest = largestExpenses(transactions, from, to, 8);
   const budgetPerf = budgetStatuses(budgets, categories, transactions, period === 'last-month' ? subMonths(now, 1) : now);
@@ -259,6 +270,19 @@ export default function Analytics() {
         </Card>
       ) : (
         <>
+          {flow && (
+            <Card className="mt-4 animate-fade-up">
+              <CardHeader className="flex-row items-center justify-between space-y-0">
+                <CardTitle>Money Flow</CardTitle>
+                <span className="text-xs text-muted-foreground">
+                  Income sources → spending — click a category to drill in
+                </span>
+              </CardHeader>
+              <CardContent>
+                <CashFlowSankeyChart data={flow} height={400} onSelectNode={openFlowNode} />
+              </CardContent>
+            </Card>
+          )}
           <div className="grid lg:grid-cols-2 gap-4 mt-4 stagger-children">
             <Card>
               <CardHeader>

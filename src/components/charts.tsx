@@ -12,12 +12,14 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  Layer,
   Line,
   LineChart,
   Pie,
   PieChart,
   ReferenceLine,
   ResponsiveContainer,
+  Sankey,
   Tooltip,
   XAxis,
   YAxis,
@@ -25,6 +27,7 @@ import {
 import { Eye, EyeOff } from 'lucide-react';
 import { useSettings } from '@/state/settings';
 import { cn } from '@/lib/utils';
+import type { FlowData, FlowNode } from '@/lib/finance';
 
 /* ------------------------- theme-reactive colors -------------------------- */
 
@@ -340,6 +343,145 @@ export function ForecastChart({
           activeDot={{ r: 4 }}
         />
       </AreaChart>
+    </ResponsiveContainer>
+  );
+}
+
+/**
+ * Monarch-style cash-flow sankey: income sources → Income → categories/Saved.
+ * Node colors follow the category entity (matching the donut); structural
+ * nodes use primary (Income) and the positive color (Saved). Labels are drawn
+ * in text tokens so identity never relies on color alone.
+ */
+export function CashFlowSankeyChart({
+  data,
+  height = 380,
+  onSelectNode,
+}: {
+  data: FlowData;
+  height?: number;
+  /** When set, clicking a category node drills in (e.g. to filtered transactions). */
+  onSelectNode?: (node: FlowNode) => void;
+}) {
+  const { fmtMoney } = useSettings();
+  const c = useChartColors();
+
+  const nodeColors = data.nodes.map((n, i) =>
+    n.color
+      ? n.color
+      : n.kind === 'income'
+        ? c.primary
+        : n.kind === 'saved'
+          ? c.positive
+          : c.series[i % c.series.length]
+  );
+  // Links are tinted by the "interesting" end: category color on both sides of
+  // the central Income node.
+  const linkColors = data.links.map((l) =>
+    nodeColors[data.nodes[l.target].kind === 'income' ? l.source : l.target]
+  );
+
+  const FlowNodeShape = (props: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    index: number;
+    payload: FlowNode & { value: number };
+    containerWidth: number;
+  }) => {
+    const { x, y, width, index, payload, containerWidth } = props;
+    const h = Math.max(props.height, 3);
+    const isLeft = x + width / 2 < containerWidth / 2;
+    // The hub's layout value is max(inflow, outflow) — label the real income
+    // total instead so an overspent period doesn't read as phantom income.
+    const value = payload.kind === 'income' ? data.totalIncome : payload.value ?? 0;
+    const clickable = !!onSelectNode && !!payload.categoryId;
+    const activate = clickable ? () => onSelectNode!(payload) : undefined;
+    return (
+      <Layer key={`flow-node-${index}`}>
+        <rect
+          x={x}
+          y={y}
+          width={width}
+          height={h}
+          rx={2}
+          fill={nodeColors[index]}
+          style={clickable ? { cursor: 'pointer' } : undefined}
+          onClick={activate}
+        />
+        <text
+          x={isLeft ? x + width + 8 : x - 8}
+          y={y + h / 2}
+          textAnchor={isLeft ? 'start' : 'end'}
+          dominantBaseline="central"
+          fontSize={11.5}
+          fill="hsl(var(--foreground))"
+          style={clickable ? { cursor: 'pointer' } : undefined}
+          onClick={activate}
+        >
+          {payload.name}
+          <tspan fill="hsl(var(--muted-foreground))" fontSize={10.5}>
+            {'  '}
+            {fmtMoney(value, { compact: true })}
+          </tspan>
+        </text>
+      </Layer>
+    );
+  };
+
+  const FlowLink = (props: {
+    sourceX: number;
+    targetX: number;
+    sourceY: number;
+    targetY: number;
+    sourceControlX: number;
+    targetControlX: number;
+    linkWidth: number;
+    index: number;
+  }) => {
+    const { sourceX, targetX, sourceY, targetY, sourceControlX, targetControlX, linkWidth, index } = props;
+    return (
+      <path
+        key={`flow-link-${index}`}
+        d={`M${sourceX},${sourceY}C${sourceControlX},${sourceY} ${targetControlX},${targetY} ${targetX},${targetY}`}
+        fill="none"
+        stroke={linkColors[index]}
+        strokeOpacity={0.3}
+        strokeWidth={Math.max(1, linkWidth)}
+      />
+    );
+  };
+
+  const FlowTooltip = ({ active, payload }: any) => {
+    if (!active || !payload?.length) return null;
+    const d = payload[0].payload?.payload ?? payload[0].payload;
+    if (!d) return null;
+    const isLink = d.source != null && d.target != null && typeof d.source === 'object';
+    return (
+      <TooltipShell
+        rows={[
+          isLink
+            ? { name: `${d.source.name} → ${d.target.name}`, value: d.value ?? 0 }
+            : { name: d.name, value: d.value ?? 0 },
+        ]}
+      />
+    );
+  };
+
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      <Sankey
+        // Sankey mutates its input during layout — hand it disposable copies.
+        data={{ nodes: data.nodes.map((n) => ({ ...n })), links: data.links.map((l) => ({ ...l })) }}
+        node={FlowNodeShape as never}
+        link={FlowLink as never}
+        nodeWidth={10}
+        nodePadding={26}
+        margin={{ top: 12, right: 140, bottom: 12, left: 8 }}
+      >
+        <Tooltip content={<FlowTooltip />} />
+      </Sankey>
     </ResponsiveContainer>
   );
 }

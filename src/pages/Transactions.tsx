@@ -144,6 +144,11 @@ async function autoCategorize(
   return n;
 }
 
+/** Turn a YYYY-MM-DD query param into the local-noon ISO string DateField uses. */
+function isoDayParam(v: string | null): string | null {
+  return v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? new Date(v + 'T12:00:00').toISOString() : null;
+}
+
 export default function Transactions() {
   const [params, setParams] = useSearchParams();
   const { fmtDate, fmtMoney } = useSettings();
@@ -188,8 +193,10 @@ export default function Transactions() {
   const [accountId, setAccountId] = React.useState(() => params.get('account') ?? 'all');
   const [method, setMethod] = React.useState('all');
   const [tag, setTag] = React.useState('all');
-  const [from, setFrom] = React.useState<string | null>(null);
-  const [to, setTo] = React.useState<string | null>(null);
+  // Seed from ?from=/&to= (YYYY-MM-DD) so budget cards can deep-link a month range.
+  // Stored as local-noon ISO to match what DateField produces.
+  const [from, setFrom] = React.useState<string | null>(() => isoDayParam(params.get('from')));
+  const [to, setTo] = React.useState<string | null>(() => isoDayParam(params.get('to')));
   const [sort, setSort] = React.useState<{ key: SortKey; dir: 1 | -1 }>({ key: 'date', dir: -1 });
   const [page, setPage] = React.useState(0);
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
@@ -212,6 +219,15 @@ export default function Transactions() {
   React.useEffect(() => {
     if (categoryParam) setCategoryId(categoryParam);
   }, [categoryParam]);
+
+  // Follow ?from=/&to= changes (e.g. clicking a budget card for another month
+  // while already on this page).
+  const fromParam = params.get('from');
+  const toParam = params.get('to');
+  React.useEffect(() => {
+    if (fromParam) setFrom(isoDayParam(fromParam));
+    if (toParam) setTo(isoDayParam(toParam));
+  }, [fromParam, toParam]);
 
   const catById = React.useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
   const accById = React.useMemo(() => new Map(accounts.map((a) => [a.id, a])), [accounts]);
